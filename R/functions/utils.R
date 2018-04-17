@@ -73,7 +73,22 @@ importSurveys <- function(dir = "data/", folders = list.files("data/"),
 
 
 # MI and bootstrap --------------------------------------------------------
-mi_point <- function(datasets, FUN) {
+pReduce <- function(data, f) {Reduce(f, data)}
+
+mi_point <- function(datasets, FUN, row_names = NULL) {
   
+  # applies a function across datasets and returns an average
+  # input to FUN should be dataset, output should be numeric
+  
+  FUN <- match.fun(FUN)
+  
+  results <- datasets %>%
+    lapply(FUN) %>%
+    data.frame %>%
+    rowMeans
+  
+  rownames(results) <- row_names
+  
+  return(results)
 }
 
