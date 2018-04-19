@@ -1,0 +1,373 @@
+library(tidyr)
+library(DescTools) # for Gini
+library(plotly)
+library(kableExtra)
+library(RColorBrewer)
+
+# Import ------------------------------------------------------------------
+bigImport <- function(targetdir = "data/HFCS_UDB_1_3_ASCII/") {
+  
+  # just wraps a bunch of data prep code - will be passed to rmd files
+  
+  Pfiles <- importType(dir = targetdir, type = "P")
+  Hfiles <- importType(dir = targetdir, type = "H")
+  Dfiles <- importType(dir = targetdir, type = "D")
+  Wfile  <- read_csv(paste0(targetdir,"W.csv"))
+  
+  var_dict <- list(
+    #id = "ID",
+    surv_id = "SA0010", # id within survey
+    country = "SA0100", # country id
+    reference_person = "DHIDH1", # head of household id
+    reference_person = "RA0010", # matches id of head of household from Pfiles
+    household_weight = "HW0010",
+    net_wealth = "DN3001",
+    deposits   = "DA2101",
+    mutual_funds = "DA2102",
+    business_wealth = "DA2104",
+    shares = "DA2105",
+    managed_accounts = "DA2106",
+    life_insurance = "DA2109",
+    total_income = "DI2000",
+    age = "RA0300",
+    age_bin = "RA0300_B",# RA0300 is not present for privacy reasons in some
+    permanent_income_flag = "HG0700"
+  )
+  
+  # only needed variables from each file
+  filter_dict <- function(dataset){
+    dataset <- dataset[colnames(dataset) %in% var_dict]
+    colnames(dataset) <- colnames(dataset) %>% 
+      sapply(function(name) names(var_dict)[var_dict==name])
+    return(dataset)
+  }
+  
+  Hfiles <- Hfiles %>%
+    lapply(filter_dict) # for consistency
+  
+  Dfiles <- Dfiles %>%
+    lapply(filter_dict) %>%
+    lapply(function(ds) ds[colnames(ds)!="household_weight"])
+  
+  Pfiles <- Pfiles %>%
+    lapply(filter_dict)
+  
+  # summaries
+  Dfiles_summary <- Dfiles %>%
+    lapply(summary)
+  
+  # data prep - merge weights, NA to 0, derive total liquid assets
+  replace_na_all <- function(dataset) {
+    replace_list <- lapply(dataset, function(x){return(0)})
+    names(replace_list) <- colnames(dataset)
+    replace_na(dataset, replace_list)
+  }
+  
+  Wealthfiles <- Dfiles %>% 
+    seq_along %>%
+    lapply(function(i){
+      D <- Dfiles[[i]] %>%
+        inner_join(Hfiles[[i]], by = c("surv_id","country")) %>%
+        inner_join(Pfiles[[i]], by = c("surv_id","country","reference_person")) %>% 
+        replace_na_all %>% # NA would become zeros here
+        mutate(managed_accounts = as.numeric(managed_accounts)) %>% # convert type
+        transmute(
+          surv_id = surv_id,
+          country = country,
+          age = age,
+          age_bin = age_bin,
+          income = total_income,
+          net_wealth = net_wealth,
+          liquid_assets = deposits + mutual_funds + business_wealth +
+            shares + managed_accounts + life_insurance,
+          weight = household_weight,
+          permanent_income_flag = permanent_income_flag
+        )
+    })
+}
+
+
+# Filters -----------------------------------------------------------------
+filter_age <- function(dset) {
+  dset %>%
+    filter((age >= 25 & age <= 60) |
+             country == "MT" & age_bin >= 6 & age_bin < 13)
+}
+
+filter_income <- function(dset) {
+  dset %>%
+    filter(permanent_income_flag == 2 | country %in% c("FR","FI")) 
+}
+
+filter_negative <- function(dset, wealthvar) {
+  dset[dset[[wealthvar]] >= 0, ]
+}
+
+filter_both <- function(dset, wealthvar) {
+  dset %>%
+    filter_age %>%
+    filter_negative(wealthvar)
+}
+
+filter_three <- function(dset, wealthvar) {
+  dset %>%
+    filter_both(wealthvar) %>%
+    filter_income
+}
+
+omni_filt <- function(dset, cntr = NULL, 
+                      filters = function(dset, ...){return(dset)}, 
+                      descending = T,
+                      wealthvar = "net_wealth",
+                      weightvar = "weight", cntryvar = "country") {
+  # some boilerplate that goes in several places below
+  dset <- filters(dset, wealthvar)
+  if (!is.null(cntr)) {
+    dset <- dset[dset[cntryvar] == cntr, ]
+  } 
+  dset <- dset[order(dset[[wealthvar]], decreasing = descending), ]
+  return(dset)
+}
+
+
+# Distributions -----------------------------------------------------------
+flag_quantile <- function(var, quantiles) {
+  flags <- lapply(quantiles, function(q) var <= q) %>%
+    as.data.frame %>%
+    rowSums 
+  
+  # this works for one clump only :(
+  notin <- (length(quantiles):1)[!(length(quantiles):1 %in% flags)]
+  
+  if (length(notin)) {
+   
+    isin  <- max(notin)+1
+    dividers <- c(isin, notin)
+    if (!flags[1] == length(quantiles)) dividers <- rev(dividers)
+    oldlev <- flags == isin
+    
+    todivide <- length(flags[flags == isin])
+    shares <- (todivide/(length(notin)+1)) %>% round
+    for (newlev in dividers) {
+      frm <- (which(c(isin, notin)==newlev)-1)*shares+1
+      to  <- min(which(c(isin, notin)==newlev)*shares,todivide)
+      flags[oldlev][frm:to] <- newlev
+    }
+     
+  }
+  
+  flags <- as.factor(flags)
+  levels(flags) <- rev(names(quantiles))
+  
+  flags
+}
+
+calc_Gini <- function(
+  dset, 
+  cntr = NULL,
+  descending = T,
+  filters = function(dset){return(dset)}, 
+  wealthvar = "net_wealth",
+  weightvar = "weight", cntryvar = "country"
+) {
+  # wrapper aroung Gini that does some filtering
+  dset <- omni_filt(dset, cntr, filters, 
+                    descending, wealthvar, weightvar, cntryvar)
+  
+  wealth <- dset[[wealthvar]]
+  weight <- dset[[weightvar]]
+  
+  Gini(wealth, n = round(weight)) # point estimate
+}
+
+
+calc_WPercentile <- function(
+  dset, cntr = NULL,  descending = T,
+  probs = seq(0,1,0.05), cumulative = T,
+  filters = function(dset){return(dset)},
+  wealthvar = "net_wealth",
+  weightvar = "weight", 
+  cntryvar = "country"
+) {
+  # weighted cumulative wealth distribution quantiles
+  dset <- omni_filt(dset, cntr, filters, 
+                    descending, wealthvar, weightvar, cntryvar)
+  
+  wealth <- rep(dset[[wealthvar]], round(dset[[weightvar]])) # weighted
+  
+  if (cumulative) {
+    quantile(x = cumsum(wealth), probs = probs) / sum(wealth)
+  } else {
+    quantile(x = wealth, probs = probs)
+  }
+  
+}
+
+calc_WtoI <- function(
+  dset, cntr = NULL, descending = F,
+  probs = seq(0,1,0.05), cumulative = T,
+  filters = function(dset){return(dset)},
+  high_cutoff = 10000, # value in C paper
+  wealthvar = "net_wealth",
+  incomevar = "income",
+  weightvar = "weight",
+  cntryvar = "country"
+) {
+  
+  # wealth to income ratios
+  # EG: Poorest 10% have 2 w/i ratio, poorest 20% have ... etc
+  if (!is.null(high_cutoff)) {
+    filt_high <- function(dset) {
+      toohigh <- (dset$qwealth/dset$qincome > high_cutoff)
+      dset$qwealth[toohigh] <- 10000 # cap
+      dset$qincome[toohigh] <- 1
+      dset
+    }
+  } else {
+    filt_high <- function(dset) dset
+  }
+  
+  dset <- omni_filt(dset, cntr, filters, 
+                    descending, wealthvar, weightvar, cntryvar)
+  
+  wealth <- rep(dset[[wealthvar]], round(dset[[weightvar]])) # weighted
+  income <- rep(dset[[incomevar]], round(dset[[weightvar]]))
+  
+  qs <- flag_quantile(wealth, quantile(x = wealth, probs = probs))
+  
+  if (cumulative) { # cumullative per quantile
+    r <- tibble(
+      ratio = cumsum(wealth)/(cumsum(income)/4), 
+      qfl = qs
+    ) %>%
+      group_by(qfl) %>%
+      filter(row_number()==ifelse(descending, n(),1))
+  } else { # average per quantile
+    r <- tibble(
+      qwealth = wealth,
+      qincome = (income/4),
+      qfl = qs
+    ) %>%
+      filt_high() %>% # filter high wealth/income rations
+      group_by(qfl) %>%
+      summarise(ratio = sum(qwealth)/sum(qincome))
+  }
+  
+  result <- r$ratio
+  names(result) <- r$qfl
+  return(result)
+}
+
+
+# Visulizations -----------------------------------------------------------
+lorenz_plotter <- function(tib, titl = "Lorenz Curves") {
+  
+  pallt <- colorRampPalette(col=c("seashell","seashell3"))(ncol(tib))
+  
+  p <- tib %>%
+    plot_ly(
+      x = seq(0,1,length.out = nrow(tib)), 
+      y = seq(0,1,length.out = nrow(tib)), name = 'baseline', 
+      type = 'scatter', mode = 'lines',
+      line = list(color = 'rgb(205, 12, 24)', width = 1)
+    )
+  for (col in seq_along(tib)) {
+    p <- add_trace(
+      p, y = tib[[col]], name = colnames(tib)[col],
+      line = list(
+        color = pallt[col],
+        width = 2
+      )             
+    )
+  }
+  p <- layout(
+    p, 
+    title = titl,
+    xaxis = list(
+      title = "Cumulative % of Population",
+      showgrid = F
+    ),
+    yaxis = list(
+      title = "Cumulative % of Wealth",
+      showgrid = F
+    )
+  )
+  return(p)
+}
+
+bar_plotter <- function(tib, lbl_names, titl = "Gini Coefficients") {
+  
+  pallt <- colorRampPalette(col=c("gray","black"))(ncol(tib))
+  
+  p <- tib %>%
+    plot_ly(x = ~lbl_names)
+  
+  for (col in seq_along(tib)) {
+    p <- add_trace(
+      p, y = tib[[col]], type = 'bar',
+      name = colnames(tib)[[col]],
+      text = ~round(tib[[col]]*100, 2), textposition = 'auto',
+      marker = list(
+        color = pallt[col],
+        line = list(
+          #color = 'rgb(195,1,1)', 
+          width = 1.5
+        )
+      )
+    )
+  }
+  
+  p <- layout(
+    p,
+    title = titl,
+    barmode = 'group',
+    xaxis = list(
+      title = ""
+    ),
+    yaxis = list(
+      title = "",
+      showgrid = F
+    )
+  )
+  
+  return(p)
+}
+
+box_plotter <- function(tib, titl = "Wealth/Income Distribution") {
+  
+  pallt <- colorRampPalette(col=c("gray","black"))(length(tib))
+  
+  gen_box <- function(mn, p25, p50, p75, mx) {
+    mn <- max(mn,p25-(p75-p25)*1.5)
+    mx <- min(mx,p75+(p75-p25)*1.5)
+    c(rep(mn,24), rep(p25,24),rep(p50,4),rep(p75,24),rep(mx,24))
+  }
+  
+  gen_box_from_table <- function(tablevar) {
+    nms <- c("0%","25%","50%","75%","100%")
+    if (!all(nms %in% names(tablevar))) stop("Missing Percentiles")
+    gen_box(tablevar[nms[1]],tablevar[nms[2]],tablevar[nms[2]],
+            tablevar[nms[4]],tablevar[nms[5]])
+  }
+  
+  p <- tibble(
+    ratio = Reduce(c,lapply(tib, gen_box_from_table)),
+    cntry = rep(names(tib), each = 100)
+  ) %>%
+    plot_ly(y = ~ratio, color = ~cntry, type = "box", colors = pallt) %>%
+    layout(
+      title = titl,
+      barmode = 'group',
+      xaxis = list(
+        title = "Country"
+      ),
+      yaxis = list(
+        title = "Wealth-to-Income Ratio",
+        showgrid = F
+      )
+    )
+  
+  return(p)
+}
+
+
