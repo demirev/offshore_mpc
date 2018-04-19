@@ -2,8 +2,7 @@
 title: "Wealth Inequality in the Eurozone - Data Observations"
 author: ""
 date: '19 April 2018'
-output: md_document
-always_allow_html: yes
+output: html_document
 ---
 
 <style type="text/css">
