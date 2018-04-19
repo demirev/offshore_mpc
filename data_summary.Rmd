@@ -1,0 +1,238 @@
+---
+title: "Wealth Inequality in the Eurozone - Data Observations"
+author: ""
+date: '19 April 2018'
+output: md_document
+always_allow_html: yes
+---
+
+<style type="text/css">
+.main-container {
+  max-width: 1800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE)
+#options(width = 8000)
+
+library(scales)
+
+source("R/functions/utils.R")
+source("R/functions/descriptives.R")
+
+formPerc <- function(x){
+  nm <- names(x)
+  x <- percent(x)
+  names(x) <- nm
+  x
+}
+
+Wealthfiles <- bigImport()
+allCountries <- unique(Wealthfiles[[1]]$country)
+
+# create summary objects
+Gini_netwealth <- allCountries %>%
+  sapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_Gini(
+        dset,
+        cntr=cnt,
+        wealthvar = "net_wealth",
+        filters = filter_both # age and non-negative
+      )
+    })
+  })
+
+Gini_liquidassets <- allCountries %>%
+  sapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_Gini(
+        dset,
+        cntr=cnt,
+        wealthvar = "liquid_assets",
+        filters = filter_both # age and non-negative
+      )
+    })
+  })
+
+Prop_netwealth <- allCountries %>%
+  lapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_WPercentile(
+        dset,
+        cntr=cnt,
+        wealthvar = "net_wealth",
+        filters = filter_both,  # age and non-negative
+        descending = T # richest to poorest
+      )
+    })
+  }) 
+names(Prop_netwealth) <- allCountries
+
+Prop_liquidassets <- allCountries %>%
+  lapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_WPercentile(
+        dset,
+        cntr=cnt,
+        wealthvar = "liquid_assets",
+        filters = filter_both, # age and non-negative
+        descending = T #richest to poorest
+      )
+    })
+  })
+names(Prop_liquidassets) <- allCountries
+
+
+Prop_netwealth_asc <- allCountries %>%
+  lapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_WPercentile(
+        dset,
+        cntr=cnt,
+        wealthvar = "net_wealth",
+        filters = filter_both, # age and non-negative
+        descending = F # poorest to richerst
+      )
+    })
+  }) 
+names(Prop_netwealth_asc) <- allCountries
+
+Prop_liquidassets_asc <- allCountries %>%
+  lapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_WPercentile(
+        dset,
+        cntr=cnt,
+        wealthvar = "liquid_assets",
+        filters = filter_both, # age and non-negative
+        descending = F #richest to poorest
+      )
+    })
+  })
+names(Prop_liquidassets_asc) <- allCountries
+
+WtoI_netwealth <- allCountries %>%
+  lapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_WtoI(
+        dset,
+        cntr=cnt,
+        wealthvar = "net_wealth",
+        filters = filter_three,
+        cumulative = F, # average per percentile
+        probs = c(0,0.25,0.5,0.75,1),
+        descending = F # poorest to richest
+      )
+    })
+  })
+names(WtoI_netwealth) <- allCountries
+
+WtoI_liquidassets <- allCountries %>%
+  lapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_WtoI(
+        dset,
+        cntr=cnt,
+        wealthvar = "liquid_assets",
+        filters = filter_three,
+        cumulative = F, # average per percentile
+        probs = c(0,0.25,0.5,0.75,1),
+        descending = F # poorest to richest
+      )
+    })
+  })
+names(WtoI_liquidassets) <- allCountries
+```
+
+## Gini
+
+### Gini Per Country
+```{r echo=FALSE}
+tibble(
+  net_wealth = Gini_netwealth,
+  liquid_assets = Gini_liquidassets
+) %>%
+  bar_plotter(allCountries)
+```
+
+### Lorenz Curves - Net Wealth
+```{r echo=FALSE}
+Prop_netwealth_asc %>% as_tibble %>% lorenz_plotter
+```
+
+
+### Net Wealth Distribution
+
+Ordered from richest to poorest percentiles.
+
+```{r echo=FALSE}
+Prop_netwealth %>% 
+  lapply(formPerc) %>%
+  as.data.frame %>%
+  kable(format = "html") %>%#booktabs = T format = "latex"
+  kable_styling(c("hover", "condensed", "responsive")) %>%
+  row_spec(0, hline_after = T) %>%
+  column_spec(1, bold = T, border_right = T) %>%
+  add_header_above(c("Top % Wealth", "Country" = length(allCountries)))
+```
+
+### Lorenz Curves - Liquid Assets
+```{r echo=FALSE}
+Prop_liquidassets_asc %>% as_tibble %>% lorenz_plotter
+```
+
+### Liquid Assets Distribution
+
+Ordered from richest to poorest percentiles.
+
+```{r echo=FALSE}
+Prop_liquidassets %>% 
+  lapply(formPerc) %>%
+  as.data.frame %>%
+  kable(format = "html") %>%#booktabs = T format = "latex"
+  kable_styling(c("hover", "condensed", "responsive")) %>%
+  row_spec(0, hline_after = T) %>%
+  column_spec(1, bold = T, border_right = T) %>%
+  add_header_above(c("Top % Wealth", "Country" = length(allCountries)))
+```
+
+## Wealth-to-Income
+
+### Wealth to Income Graph - Net Wealth
+```{r echo = FALSE}
+WtoI_netwealth %>% 
+  box_plotter
+```
+
+### Wealth to Income Table
+```{r echo = FALSE}
+WtoI_netwealth %>%
+  as.data.frame %>%
+  kable(format = "html") %>%#booktabs = T format = "latex"
+  kable_styling(c("hover", "condensed", "responsive")) %>%
+  row_spec(0, hline_after = T) %>%
+  column_spec(1, bold = T, border_right = T) %>%
+  add_header_above(c("Top % Wealth", "Country" = length(allCountries)))
+```
+
+### Wealth to Income Graph - Net Wealth
+```{r echo = FALSE}
+WtoI_liquidassets %>% 
+  box_plotter
+```
+
+### Wealth to Income Table
+```{r echo = FALSE}
+WtoI_liquidassets %>%
+  as.data.frame %>%
+  kable(format = "html") %>%#booktabs = T format = "latex"
+  kable_styling(c("hover", "condensed", "responsive")) %>%
+  row_spec(0, hline_after = T) %>%
+  column_spec(1, bold = T, border_right = T) %>%
+  add_header_above(c("Top % Wealth", "Country" = length(allCountries)))
+```
+
