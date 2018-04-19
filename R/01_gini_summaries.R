@@ -1,9 +1,11 @@
+#source("R/functions/descriptives.R")
 library(tidyr)
-library(Hmisc) # for weighted quantile
 library(DescTools) # for Gini
+library(plotly)
+library(kableExtra)
 
 source("R/functions/utils.R")
-
+source("R/functions/descriptives.R")
 
 # Prepare Data ------------------------------------------------------------
 # import
@@ -28,7 +30,8 @@ var_dict <- list(
   managed_accounts = "DA2106",
   life_insurance = "DA2109",
   total_income = "DI2000",
-  age = "RA0300", #"RA0300_B", # RA0300 is not present for privacy reasons in some
+  age = "RA0300",
+  age_bin = "RA0300_B",# RA0300 is not present for privacy reasons in some
   permanent_income_flag = "HG0700"
 )
 
@@ -66,17 +69,14 @@ Wealthfiles <- Dfiles %>%
   lapply(function(i){
     D <- Dfiles[[i]] %>%
       inner_join(Hfiles[[i]], by = c("surv_id","country")) %>%
-      inner_join(Pfiles[[i]], # id in slighntly different format 
-                 by = c("surv_id","country","reference_person")) %>% 
-      replace_na_all %>%
+      inner_join(Pfiles[[i]], by = c("surv_id","country","reference_person")) %>% 
+      replace_na_all %>% # NA would become zeros here
       mutate(managed_accounts = as.numeric(managed_accounts)) %>% # convert type
-      filter(age >= 25 & age <= 60) %>%
-      #filter(age >= 6 & age < 13) %>% # 6 is 25-29, 13 is 60-64
-      #filter(permanent_income_flag == 2 | country %in% c("FR","FI")) %>% # 2 is 'normal' income
       transmute(
         surv_id = surv_id,
         country = country,
         age = age,
+        age_bin = age_bin,
         income = total_income,
         net_wealth = net_wealth,
         liquid_assets = deposits + mutual_funds + business_wealth +
@@ -85,145 +85,154 @@ Wealthfiles <- Dfiles %>%
         permanent_income_flag = permanent_income_flag
       )
   })
-Wealthfiles_obs <- Wealthfiles[[1]]$country %>% table
-Wealthfiles_summary <- Wealthfiles %>% lapply(summary)
-
 
 # Create Summaries --------------------------------------------------------
-# Gini by country --
+allCountries <- unique(Wealthfiles[[1]]$country)
 
-# helper functions
-calcGini <- function(dset, cntr = NULL, lower_cut = 0,
-                     wealthvar = "net_wealth",
-                     weightvar = "weight", cntryvar = "country") {
-  
-  # wrapper aroung Gini that does some filtering
-  
-  if (!is.null(cntr)) {
-    dset <- dset[dset[cntryvar] == cntr, ]
-  } 
-  
-  if (!is.null(lower_cut)) {
-    dset <- dset[dset[wealthvar] >= lower_cut, ]
-  }
-  
-  
-  wealth <- dset[[wealthvar]]
-  weight <- dset[[weightvar]]
-  
-  Gini(wealth, n = round(weight)) # point estimate
-}
-
-
-calcWealthPerc <- function(dset, cntr = NULL, probs = seq(0,1,0.05),
-                           lower_cut = 0, wealthvar = "net_wealth",
-                           weightvar = "weight", cntryvar = "country") {
-  
-  # weighted cumulative weight distribution quantiles
-
-  if (!is.null(cntr)) {
-    dset <- dset[dset[cntryvar] == cntr, ]
-  } 
-  
-  if (!is.null(lower_cut)) {
-    dset <- dset[dset[wealthvar] >= lower_cut, ]
-  }
-  
-  dset <- dset[order(dset[[wealthvar]], decreasing = T), ] # descending wealth
-  
-  wealth <- dset[[wealthvar]]
-  weight <- dset[[weightvar]]
-  
-  total_wealth <- sum(wealth)
-  cumul_wealth <- cumsum(wealth)
-  
-  wtd.quantile(x = cumul_wealth, weights = weight, probs = probs) / total_wealth
-  
-}
-
-calcWealthIncomeRatios <- function(
-  dset, cntr = NULL, lower_cut = 0,
-  probs = seq(0,1,0.05),
-  wealthvar = "net_wealth",
-  incomevar = "income",
-  weightvar = "weight",
-  cntryvar = "country") {
-  
-  # wealth to income ratios
-  # EG: Poorest 10% have 2 w/i ratio, poorest 20% have ... etc
-  
-  if (!is.null(cntr)) {
-    dset <- dset[dset[cntryvar] == cntr, ]
-  } 
-  
-  if (!is.null(lower_cut)) {
-    dset <- dset[dset[wealthvar] >= lower_cut, ]
-  }
-  
-  dset <- dset[order(dset[[wealthvar]], decreasing = F), ] # !!!Ascending wealth
-  
-  wealth <- dset[[wealthvar]]
-  weight <- dset[[weightvar]]
-  income <- dset[[incomevar]]
-  
-  total_wealth <- sum(wealth)
-  cumul_wealth <- cumsum(wealth)
-  cumul_income <- cumsum(income)
-  ratio  <- cumul_wealth/(cumul_income/4)
-  
-  qs <- wtd.quantile(x = cumul_wealth, weights = weight, probs = probs) / total_wealth
-  
-  sapply(probs, function(q) {
-    ratio[cumul_wealth/total_wealth >= qs[which(probs==q)]][1] # first that meets 
-    # the corresponding quantile of the wealth distribution
+Gini_netwealth <- allCountries %>%
+  sapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_Gini(
+        dset,
+        cntr=cnt,
+        wealthvar = "net_wealth",
+        filters = filter_both # age and non-negative
+      )
+    })
   })
-  
-}
 
-# Ginis
-Gini_netwealth <- sapply(unique(Wealthfiles[[1]]$country), function(cnt) {
-  mi_point(Wealthfiles, FUN = function(dset) {
-    calcGini(dset, cntr=cnt, wealthvar = "net_wealth")
+Gini_liquidassets <- allCountries %>%
+  sapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_Gini(
+        dset,
+        cntr=cnt,
+        wealthvar = "liquid_assets",
+        filters = filter_both # age and non-negative
+      )
+    })
   })
-})
 
-Gini_liquidassets <- sapply(unique(Wealthfiles[[1]]$country), function(cnt) {
-  mi_point(Wealthfiles, FUN = function(dset) {
-    calcGini(dset, cntr=cnt, wealthvar = "liquid_assets")
-  })
-})
+Prop_netwealth <- allCountries %>%
+  lapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_WPercentile(
+        dset,
+        cntr=cnt,
+        wealthvar = "net_wealth",
+        filters = filter_both,  # age and non-negative
+        descending = T # richest to poorest
+      )
+    })
+  }) 
+names(Prop_netwealth) <- allCountries
 
-# Wealth Quantiles
-Prop_netwealth <- lapply(unique(Wealthfiles[[1]]$country), function(cnt) {
-  mi_point(Wealthfiles, FUN = function(dset) {
-    calcWealthPerc(dset, cntr=cnt, wealthvar = "net_wealth")
+Prop_liquidassets <- allCountries %>%
+  lapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_WPercentile(
+        dset,
+        cntr=cnt,
+        wealthvar = "liquid_assets",
+        filters = filter_both, # age and non-negative
+        descending = T #richest to poorest
+      )
+    })
   })
-})
-names(Prop_netwealth) <- unique(Wealthfiles[[1]]$country)
+names(Prop_liquidassets) <- allCountries
 
-Prop_liquidassets <- lapply(unique(Wealthfiles[[1]]$country), function(cnt) {
-  mi_point(Wealthfiles, FUN = function(dset) {
-    calcWealthPerc(dset, cntr=cnt, wealthvar = "liquid_assets")
+
+Prop_netwealth_asc <- allCountries %>%
+  lapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_WPercentile(
+        dset,
+        cntr=cnt,
+        wealthvar = "net_wealth",
+        filters = filter_both, # age and non-negative
+        descending = F # poorest to richerst
+      )
+    })
+  }) 
+names(Prop_netwealth_asc) <- allCountries
+
+Prop_liquidassets_asc <- allCountries %>%
+  lapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_WPercentile(
+        dset,
+        cntr=cnt,
+        wealthvar = "liquid_assets",
+        filters = filter_both, # age and non-negative
+        descending = F #richest to poorest
+      )
+    })
   })
-})
-names(Prop_liquidassets) <- unique(Wealthfiles[[1]]$country)
- 
+names(Prop_liquidassets_asc) <- allCountries
+
 # Wealth-to-income
-WtoI_netwealth <- lapply(unique(Wealthfiles[[1]]$country), function(cnt) {
-  mi_point(Wealthfiles, FUN = function(dset) {
-    calcWealthIncomeRatios(dset, cntr=cnt, wealthvar = "net_wealth")
+WtoI_netwealth <- allCountries %>%
+  lapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_WtoI(
+        dset,
+        cntr=cnt,
+        wealthvar = "net_wealth",
+        filters = filter_three,
+        cumulative = F, # average per percentile
+        probs = c(0,0.25,0.5,0.75,1),
+        descending = F # poorest to richest
+      )
+    })
   })
-})
-names(WtoI_netwealth) <- unique(Wealthfiles[[1]]$country)
+names(WtoI_netwealth) <- allCountries
 
-WtoI_liquidassets <- lapply(unique(Wealthfiles[[1]]$country), function(cnt) {
-  mi_point(Wealthfiles, FUN = function(dset) {
-    calcWealthIncomeRatios(dset, cntr=cnt, wealthvar = "liquid_assets")
+WtoI_liquidassets <- allCountries %>%
+  lapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_WtoI(
+        dset,
+        cntr=cnt,
+        wealthvar = "liquid_assets",
+        filters = filter_three,
+        cumulative = F, # average per percentile
+        probs = c(0,0.25,0.5,0.75,1),
+        descending = F # poorest to richest
+      )
+    })
   })
-})
-names(WtoI_liquidassets) <- unique(Wealthfiles[[1]]$country)
+names(WtoI_liquidassets) <- allCountries
 
 
 # Visualizations ----------------------------------------------------------
+v1 <- Prop_netwealth %>% as_tibble %>% lorenz_plotter
+v2 <- tibble(
+  net_wealth = Gini_netwealth,
+  liquid_assets = Gini_liquidassets
+) %>%
+  bar_plotter(allCountries)
+v3 <- WtoI_netwealth %>% box_plotter()
+
+
+# dens <- with(Wealthfiles[[1]], tapply(net_wealth, INDEX = country, density))
+# df <- data.frame(
+#   x = unlist(lapply(dens, "[[", "x")),
+#   y = unlist(lapply(dens, "[[", "y")),
+#   country = rep(names(dens), each = length(dens[[1]]$x))
+# )
+
+# hist_plot <- plot_ly(df, x = ~x, y = ~y, color = ~country) %>%
+#   add_lines() %>%
+#   layout(
+#     title = "Gini Coefficients",
+#     barmode = 'group',
+#     xaxis = list(
+#       title = ""
+#     ),
+#     yaxis = list(
+#       title = "",
+#       showgrid = F
+#     )
+#   )
 
 
