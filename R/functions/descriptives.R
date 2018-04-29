@@ -63,6 +63,30 @@ bigImport <- function(targetdir = "data/HFCS_UDB_1_3_ASCII/") {
     replace_na(dataset, replace_list)
   }
   
+  # import off-shore wealth figures
+  # temp - should be read from original Zucman file in final version
+  OffShoreWealth <- list(
+    AT = 386.458951546674,
+    BE = 471.821790309335,
+    CY = 0,
+    DE = 3439.9534629072,
+    ES = 1479.34163701068,
+    FI = 255.384615384615,
+    FR = 2663.11251026554,
+    GR = 318.497936901177,
+    IT = 2203.05332712839,
+    LU = 0,
+    MT = 0,
+    NL = 839.419655078018,
+    PT = 240.169336162059,
+    SI = 48.1146882014782,
+    SK = 86.304245825349
+  ) %>%
+    lapply(function(x) x*0.773477635) %>% # to eur 2009
+    lapply(function(x) x*1000000000) # from bln
+  
+  
+  
   Wealthfiles <- Dfiles %>% 
     seq_along %>%
     lapply(function(i){
@@ -82,10 +106,88 @@ bigImport <- function(targetdir = "data/HFCS_UDB_1_3_ASCII/") {
             shares + managed_accounts + life_insurance,
           weight = household_weight,
           permanent_income_flag = permanent_income_flag
-        )
+        ) %>%
+        group_by(country) %>%
+        mutate(
+          offshore_wealth = calc_offshore2(
+            wealthvar = net_wealth,#liquid_assets, 
+            offshore = OffShoreWealth[country][[1]],
+            weight = weight
+          ),
+          liquid_offshore_wealth = calc_offshore2(
+            wealthvar = liquid_assets, 
+            offshore = OffShoreWealth[country][[1]],
+            weight = weight
+          )
+        ) %>%
+        ungroup
     })
 }
 
+
+
+# Off-shore Wealth Merge --------------------------------------------------
+calc_offshore <- function(wealthvar, offshore, 
+                          probs = seq(0,1,length.out = length(wealthvar)), 
+                          weight,
+                          share_bottom_90 = 1.58226, coeff = 2.7672) {
+  browser()
+  qs <- quantile(wealthvar, probs)
+  
+  original_order <- (1:length(wealthvar))[order(wealthvar)]
+  wealthvar <- wealthvar[order(wealthvar)]
+  
+  cumshares = vector("numeric",length(qs))
+  
+  for (q in probs) {
+    if (q <= 0.9) {
+      cumshares[which(qs == q)] <- share_bottom_90/sum(qs <= 0.9)
+    } else {
+      cumshares[which(qs == q)] <- share_bottom_90/(1-q)^(1/coeff) - 
+        cumshares[which(qs == q)]
+    }
+    
+  }
+  
+  result <- wealthvar + cumshares*offshore*weight/sum(weight)
+  result <- result[original_order]
+}
+
+calc_offshore2 <- function(
+  wealthvar, offshore, 
+  weight,
+  share_bottom_90 = 0.0158226,
+  share_top_10 = 0.009891366,
+  share_top_5 = 0.038324026,
+  share_top_1 = 0.034766489,
+  share_top_05 = 0.132246103,
+  share_top_01 = 0.253311256,
+  share_top_001 = 0.515638502
+) {
+  #browser()
+  probs = c(0.9,0.95,0.99,0.995,0.999,0.9999)
+  qs <- quantile(rep(wealthvar,weight), probs)
+  
+  # quick version - manual input of a lot of things
+  cond1 <- wealthvar < qs["90%"]
+  cond2 <- wealthvar >= qs["90%"] & wealthvar < qs["95%"]
+  cond3 <- wealthvar >= qs["95%"] & wealthvar < qs["99%"]
+  cond4 <- wealthvar >= qs["99%"] & wealthvar < qs["99.5%"]
+  cond5 <- wealthvar >= qs["99.5%"] & wealthvar < qs["99.9%"]
+  cond6 <- wealthvar >= qs["99.9%"] & wealthvar < qs["99.99%"]
+  cond7 <- wealthvar >= qs["99.99%"]
+  
+  offshore_dist <- cond1*share_bottom_90 + cond2*share_top_10 + 
+    cond3*share_top_5 + cond4*share_top_1 + cond5*share_top_05 +
+    cond6*share_top_01 + cond7*share_top_001
+  bygroupweight <- cond1*sum(weight[cond1]) + cond2*sum(weight[cond2]) +
+    cond3*sum(weight[cond3]) + cond4*sum(weight[cond4]) +
+    cond5*sum(weight[cond5]) + cond6*sum(weight[cond6]) +
+    cond7*sum(weight[cond7])
+  
+  result <- wealthvar + offshore*offshore_dist/bygroupweight
+  result
+}
 
 # Filters -----------------------------------------------------------------
 filter_age <- function(dset) {
@@ -162,11 +264,27 @@ flag_quantile <- function(var, quantiles) {
   flags
 }
 
+calc_Totals <- function(
+  dset, 
+  cntr = NULL,
+  filters = function(dset,...){return(dset)}, 
+  descending = T,
+  wealthvar = "neat_wealth", # for filtering
+  sumvars = c("net_wealth","liquid_assets","offshore_wealth"),
+  weightvar = "weight", cntryvar = "country"
+) {
+  # weighted column sums
+  dset <- omni_filt(dset, cntr, filters, 
+                    descending, wealthvar, weightvar, cntryvar)
+  
+  sapply(sumvars, function(sumvar) sum(dset[[sumvar]]*dset[[weightvar]]))
+}
+
 calc_Gini <- function(
   dset, 
   cntr = NULL,
   descending = T,
-  filters = function(dset){return(dset)}, 
+  filters = function(dset,...){return(dset)}, 
   wealthvar = "net_wealth",
   weightvar = "weight", cntryvar = "country"
 ) {
@@ -184,7 +302,7 @@ calc_Gini <- function(
 calc_WPercentile <- function(
   dset, cntr = NULL,  descending = T,
   probs = seq(0,1,0.05), cumulative = T,
-  filters = function(dset){return(dset)},
+  filters = function(dset,...){return(dset)},
   wealthvar = "net_wealth",
   weightvar = "weight", 
   cntryvar = "country"
@@ -206,7 +324,7 @@ calc_WPercentile <- function(
 calc_WtoI <- function(
   dset, cntr = NULL, descending = F,
   probs = seq(0,1,0.05), cumulative = T,
-  filters = function(dset){return(dset)},
+  filters = function(dset,...){return(dset)},
   high_cutoff = 10000, # value in C paper
   wealthvar = "net_wealth",
   incomevar = "income",
@@ -260,9 +378,10 @@ calc_WtoI <- function(
 
 
 # Visulizations -----------------------------------------------------------
-lorenz_plotter <- function(tib, titl = "Lorenz Curves") {
+lorenz_plotter <- function(tib, titl = "Lorenz Curves", 
+                           colr = c("gray","black")) {
   
-  pallt <- colorRampPalette(col=c("seashell","seashell3"))(ncol(tib))
+  pallt <- colorRampPalette(col=colr)(ncol(tib))
   
   p <- tib %>%
     plot_ly(
@@ -295,9 +414,10 @@ lorenz_plotter <- function(tib, titl = "Lorenz Curves") {
   return(p)
 }
 
-bar_plotter <- function(tib, lbl_names, titl = "Gini Coefficients") {
+bar_plotter <- function(tib, lbl_names, titl = "Gini Coefficients",
+                        colr = c("seashell","seashell3")) {
   
-  pallt <- colorRampPalette(col=c("gray","black"))(ncol(tib))
+  pallt <- colorRampPalette(col=colr)(ncol(tib))
   
   p <- tib %>%
     plot_ly(x = ~lbl_names)
@@ -306,7 +426,7 @@ bar_plotter <- function(tib, lbl_names, titl = "Gini Coefficients") {
     p <- add_trace(
       p, y = tib[[col]], type = 'bar',
       name = colnames(tib)[[col]],
-      text = ~round(tib[[col]]*100, 2), textposition = 'auto',
+      text = round(tib[[col]]*100, 2), textposition = 'auto',
       marker = list(
         color = pallt[col],
         line = list(
@@ -333,9 +453,10 @@ bar_plotter <- function(tib, lbl_names, titl = "Gini Coefficients") {
   return(p)
 }
 
-box_plotter <- function(tib, titl = "Wealth/Income Distribution") {
+box_plotter <- function(tib, titl = "Wealth/Income Distribution", 
+                        colr = c("gray","black")) {
   
-  pallt <- colorRampPalette(col=c("gray","black"))(length(tib))
+  pallt <- colorRampPalette(col=colr)(length(tib))
   
   gen_box <- function(mn, p25, p50, p75, mx) {
     mn <- max(mn,p25-(p75-p25)*1.5)
@@ -358,16 +479,18 @@ box_plotter <- function(tib, titl = "Wealth/Income Distribution") {
     layout(
       title = titl,
       barmode = 'group',
+      autosize = F, width = 1000,
       xaxis = list(
-        title = "Country"
+        title = "Country", range = c(0,95)
       ),
       yaxis = list(
         title = "Wealth-to-Income Ratio",
         showgrid = F
+      ),
+      legend = list(
+        orientation = 'h'
       )
     )
   
   return(p)
 }
-
-

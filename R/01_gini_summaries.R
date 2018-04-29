@@ -64,6 +64,26 @@ replace_na_all <- function(dataset) {
   replace_na(dataset, replace_list)
 }
 
+OffShoreWealth <- list(
+  AT = 386.458951546674,
+  BE = 471.821790309335,
+  CY = 0,
+  DE = 3439.9534629072,
+  ES = 1479.34163701068,
+  FI = 255.384615384615,
+  FR = 2663.11251026554,
+  GR = 318.497936901177,
+  IT = 2203.05332712839,
+  LU = 0,
+  MT = 0,
+  NL = 839.419655078018,
+  PT = 240.169336162059,
+  SI = 48.1146882014782,
+  SK = 86.304245825349
+) %>%
+  lapply(function(x) x*0.7477) %>% # to eur
+  lapply(function(x) x*1000000000) # from bln
+
 Wealthfiles <- Dfiles %>% 
   seq_along %>%
   lapply(function(i){
@@ -83,11 +103,37 @@ Wealthfiles <- Dfiles %>%
           shares + managed_accounts + life_insurance,
         weight = household_weight,
         permanent_income_flag = permanent_income_flag
-      )
+      ) %>%
+      group_by(country) %>%
+      mutate(
+        offshore_wealth = calc_offshore2(
+          wealthvar = net_wealth,#liquid_assets, 
+          offshore = OffShoreWealth[country][[1]],
+          weight = weight
+        ),
+        liquid_offshore_wealth = calc_offshore2(
+          wealthvar = liquid_assets, 
+          offshore = OffShoreWealth[country][[1]],
+          weight = weight
+        )
+      ) %>%
+      ungroup
   })
 
 # Create Summaries --------------------------------------------------------
 allCountries <- unique(Wealthfiles[[1]]$country)
+
+Totals <- allCountries %>%
+  sapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_Totals(
+        dset,
+        cntr=cnt,
+        wealthvar = "net_wealth", # for filter
+        filters = filter_both # age and non-negative
+      )
+    })
+  })
 
 Gini_netwealth <- allCountries %>%
   sapply(function(cnt) {
@@ -108,6 +154,30 @@ Gini_liquidassets <- allCountries %>%
         dset,
         cntr=cnt,
         wealthvar = "liquid_assets",
+        filters = filter_both # age and non-negative
+      )
+    })
+  })
+
+Gini_offshore <- allCountries %>%
+  sapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_Gini(
+        dset,
+        cntr=cnt,
+        wealthvar = "offshore_wealth",
+        filters = filter_both # age and non-negative
+      )
+    })
+  })
+
+Gini_offshore_liquid <- allCountries %>%
+  sapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_Gini(
+        dset,
+        cntr=cnt,
+        wealthvar = "liquid_offshore_wealth",
         filters = filter_both # age and non-negative
       )
     })
@@ -142,12 +212,41 @@ Prop_liquidassets <- allCountries %>%
 names(Prop_liquidassets) <- allCountries
 
 
-Prop_netwealth_asc <- allCountries %>%
+Prop_offshoreweath <- allCountries %>%
   lapply(function(cnt) {
     mi_point(Wealthfiles, FUN = function(dset) {
       calc_WPercentile(
         dset,
         cntr=cnt,
+        wealthvar = "offshore_wealth",
+        filters = filter_both, # age and non-negative
+        descending = T #richest to poorest
+      )
+    })
+  })
+names(Prop_offshoreweath) <- allCountries
+
+Prop_offshoreweath_liquid <- allCountries %>%
+  lapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_WPercentile(
+        dset,
+        cntr=cnt,
+        wealthvar = "liquid_offshore_wealth",
+        filters = filter_both, # age and non-negative
+        descending = T #richest to poorest
+      )
+    })
+  })
+names(Prop_offshoreweath_liquid) <- allCountries
+
+Prop_netwealth_asc <- allCountries %>%
+  lapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_WPercentile(
+        dset,
+        cntr=cnt, 
+        probs = seq(0,1,0.001),
         wealthvar = "net_wealth",
         filters = filter_both, # age and non-negative
         descending = F # poorest to richerst
@@ -162,6 +261,7 @@ Prop_liquidassets_asc <- allCountries %>%
       calc_WPercentile(
         dset,
         cntr=cnt,
+        probs = seq(0,1,0.001),
         wealthvar = "liquid_assets",
         filters = filter_both, # age and non-negative
         descending = F #richest to poorest
@@ -169,6 +269,37 @@ Prop_liquidassets_asc <- allCountries %>%
     })
   })
 names(Prop_liquidassets_asc) <- allCountries
+
+
+Prop_offshorewealth_asc <- allCountries %>%
+  lapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_WPercentile(
+        dset,
+        cntr=cnt,
+        probs = seq(0,1,0.001),
+        wealthvar = "offshore_wealth",
+        filters = filter_both, # age and non-negative
+        descending = F #richest to poorest
+      )
+    })
+  })
+names(Prop_offshorewealth_asc) <- allCountries
+
+Prop_liquidoffshorewealth_asc <- allCountries %>%
+  lapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_WPercentile(
+        dset,
+        cntr=cnt,
+        probs = seq(0,1,0.001),
+        wealthvar = "liquid_offshore_wealth",
+        filters = filter_both, # age and non-negative
+        descending = F #richest to poorest
+      )
+    })
+  })
+names(Prop_liquidoffshorewealth_asc) <- allCountries
 
 # Wealth-to-income
 WtoI_netwealth <- allCountries %>%
@@ -213,6 +344,14 @@ v2 <- tibble(
   bar_plotter(allCountries)
 v3 <- WtoI_netwealth %>% box_plotter()
 
+list(
+  liquid_assets = Prop_liquidassets_asc$DE,
+  net_wealth = Prop_netwealth_asc$DE,
+  net_wealth_offshore = Prop_offshorewealth_asc$DE,
+  liquid_assets_offshore = Prop_liquidoffshorewealth_asc$DE
+) %>%
+as_tibble %>%
+lorenz_plotter(colr = c("gray","black"), titl = "Germany")
 
 # dens <- with(Wealthfiles[[1]], tapply(net_wealth, INDEX = country, density))
 # df <- data.frame(
