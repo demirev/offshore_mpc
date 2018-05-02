@@ -51,7 +51,7 @@ fit_loess <- function(V) {
     if (length(m) > 1 & length(k) == 1) {
       k <- rep(k, length(m))
     }
-    predict(fit, data.frame(m, k, value = 0, action = 0))
+    predict(fit, data.frame(m, k, value = 0, action = 0), type = "response")
   }
   return(pred_func)
 }
@@ -73,7 +73,7 @@ fit_spline <- function(V, df = 3) {
     if (length(m) > 1 & length(k) == 1) {
       k <- rep(k, length(m))
     }
-    predict(fit, data.frame(m, k, value = 0, action = 0))
+    predict(fit, data.frame(m, k, value = 0, action = 0), type = "response")
   }
   return(pred_func)
 }
@@ -95,7 +95,7 @@ fit_loess2 <- function(V, degree = 1) {
     if (length(m) > 1 & length(k) == 1) {
       k <- rep(k, length(m))
     }
-    predict(fit, data.frame(m, k, value = 0, action = 0))
+    predict(fit, data.frame(m, k, value = 0, action = 0), type = "response")
   }
   return(pred_func)
 }
@@ -141,14 +141,12 @@ opt_pol <- function(
     future_m[future_m < 0] <- 0 # negative assets don't make sense
     # query policy at given future value
     future_c <- polf(future_m, future_k)
-    # take expectation
-    future_c <- sum(future_c * stoh_grid$prob)
     # for numerical stability
     future_c[future_c < 0] <- 1e-16 # small but positive
     # expected marginal utility
-    exp_mu <- utilf$MU(future_c)
+    exp_mu <- sum(utilf$MU(future_c) * stoh_grid$prob)  #  *stoh_grid$psi^(1 - utilf$rho)  ??
     # Euler equation
-    return(utilf$MU(c) - beta*(1 - delta + r)*exp_mu)
+    return(utilf$MU(c) - beta * (1 - delta + r)*exp_mu) # *(1 - D)  ?
   }
   
   if (foc(0) < 0) {
@@ -177,8 +175,8 @@ pf_iter <- function(
   k_law = function(k) {return(k)},
   prodf = Cobb_Douglas$new(alpha = 0.36),
   utilf = Iso_Elastic$new(rho = 1),
-  psi = NoShock$new(const = 1),
-  xi  = NoShock$new(const = 0),
+  psi = NoShock$new(mu = 1),
+  xi  = NoShock$new(mu = 1),
   #psi = LogNormalShock$new(),
   #xi  = NormalShock$new(),
   # optimal action choice parameters
@@ -271,10 +269,13 @@ policy_plot <- function(
   state_space,
   main = "Policy Plot",
   ylb = "c/m",
-  xlb = "m"
+  xlb = "m",
+  point = FALSE
 ) {
   
-  state_space$action <- policy(state_space$m, state_space$k)
+  if (!point) {
+    state_space$action <- policy(state_space$m, state_space$k)
+  }
   
   if (length(unique(state_space$k)) == 1) {
     p <- ggplot(data = state_space, aes(x = m, y = action/m)) +
@@ -334,3 +335,32 @@ policy_plot <- function(
 #   ndraw = 500
 # )
 
+# test5_1 <- pf_iter(
+#   xi = NormalShock$new(sigma = 0.5),
+#   psi = LogNormalShock$new(sigma = 0.5),
+#   ndraw = 200
+# )
+# test5_2 <- pf_iter(
+#   xi = NormalShock$new(sigma = 0.5),
+#   #psi = LogNormalShock$new(sigma = 0.5),
+#   ndraw = 200
+# )
+# test5_3 <- pf_iter(
+#   #xi = NormalShock$new(sigma = 0.5),
+#   psi = LogNormalShock$new(sigma = 0.5),
+#   ndraw = 200
+# )
+
+test6_1 <- pf_iter(
+  psi = LogNormalShock$new(sigma = 0.04),
+  ndraw = 700
+)
+test6_2 <- pf_iter(
+  xi = EmploymentShock$new(sigma = 0.04),
+  ndraw = 700
+)
+test6_3 <- pf_iter(
+  xi = EmploymentShock$new(sigma = 0.04),
+  psi = LogNormalShock$new(sigma = 0.04),
+  ndraw = 200
+)  
