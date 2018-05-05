@@ -2,19 +2,9 @@ library(splines)
 library(gam)
 
 discretize_m <- function(
-  P_bounds = c(0.5,1.5),
-  p_bounds = c(0.5,1.5),
-  alpha = 0.3, 
-  beta = 0.98, 
-  delta = 0.4, 
-  prodf = Cobb_Douglas$new(alpha = alpha),
-  above = 1.2,
-  D = 0.00625,
+  max_m = 50,
   num_out = 500
 ) {
-  highest_k <- ((alpha*beta)/(1 - beta*(1 - delta)))^(1/(1 - alpha))/P_bounds[1]
-  max_r <- prodf$MPKk(highest_k) 
-  max_m <- 1/(1 - D) * (1 - delta * max_r)
   return(seq(0, max_m, length.out = num_out))
 }
 
@@ -144,7 +134,7 @@ opt_pol <- function(
     # for numerical stability
     future_c[future_c < 0] <- 1e-16 # small but positive
     # expected marginal utility
-    exp_mu <- sum(utilf$MU(future_c) * stoh_grid$prob)  #  *stoh_grid$psi^(1 - utilf$rho)  ??
+    exp_mu <- sum(utilf$MU(future_c) * stoh_grid$psi^(-utilf$rho) * stoh_grid$prob)  #  *stoh_grid$psi^(1 - utilf$rho)  ??
     # Euler equation
     return(utilf$MU(c) - beta * (1 - delta + r)*exp_mu) # *(1 - D)  ?
   }
@@ -177,16 +167,12 @@ pf_iter <- function(
   utilf = Iso_Elastic$new(rho = 1),
   psi = NoShock$new(mu = 1),
   xi  = NoShock$new(mu = 1),
-  #psi = LogNormalShock$new(),
-  #xi  = NormalShock$new(),
   # optimal action choice parameters
   cgrid = 40,
   ndraw = 500,
   # discretization parameters
-  P_bounds_m = c(0.5, 1.5),
-  p_bounds_m = c(0.5, 1.5),
-  num_out_m = 80,
-  above_m = 1.2,
+  max_m = 50,
+  num_out_m = 160,
   P_bounds_k = c(1,1),
   below_k = 1,
   above_k = 1,
@@ -195,14 +181,7 @@ pf_iter <- function(
   
   # discretize state sapce
   m_seq <- discretize_m(
-    P_bounds = P_bounds_m,
-    p_bounds = p_bounds_m,
-    alpha = alpha,
-    beta = beta,
-    delta = delta,
-    prodf = prodf,
-    above = above_m,
-    D = D,
+    max_m = max_m,
     num_out = num_out_m
   )
   k_seq <- discretize_k(
@@ -352,15 +331,15 @@ policy_plot <- function(
 # )
 
 test6_1 <- pf_iter(
-  psi = LogNormalShock$new(sigma = 0.04),
-  ndraw = 700
+  psi = LogNormalShock$new(sigma = 0.0025),
+  ndraw = 400
 )
 test6_2 <- pf_iter(
   xi = EmploymentShock$new(sigma = 0.04),
-  ndraw = 700
+  ndraw = 400
 )
 test6_3 <- pf_iter(
   xi = EmploymentShock$new(sigma = 0.04),
-  psi = LogNormalShock$new(sigma = 0.04),
-  ndraw = 200
+  psi = LogNormalShock$new(sigma = 0.025),
+  ndraw = 60
 )  
