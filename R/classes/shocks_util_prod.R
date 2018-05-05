@@ -18,6 +18,9 @@ NoShock <- R6Class(
     },
     draw = function(n) {
       return(tibble(value = self$mu, prob = 1))
+    },
+    sample = function(n) {
+      return(rep(self$mu, n))
     }
   )
 )
@@ -33,7 +36,7 @@ NormalShock <- R6Class(
       self$sigma <- sigma
     },
     draw = function(n) {
-      # draw n realizations
+      # draw n realizations to approximate the pdf
       value <- sort(rnorm(n, mean = self$mu, sd = self$sigma))
       # cdf for each
       probs <- pnorm(value, mean = self$mu, sd = self$sigma)
@@ -43,6 +46,10 @@ NormalShock <- R6Class(
       probs <- probs - c(0, probs[-length(probs)]) # banded probability
       probs[length(probs)] <- probs[length(probs)] + bonus 
       return(tibble(value = value, prob = probs))
+    },
+    sample = function(n) {
+      # sample n observations for simulations
+      return(rnorm(n, mean = self$mu, sd = self$sigma))
     }
   )
 )
@@ -58,7 +65,7 @@ LogNormalShock <- R6Class(
       (exp(self$sigma^2 - 1))*exp(2*self$mu + self$sigma^2)
     },
     draw = function(n) {
-      # draw n realizations
+      # draw n realizations to approximate the pdf
       value <- sort(rlnorm(n, meanlog = self$mu, sdlog = self$sigma))
       # cdf for each
       probs <- plnorm(value, meanlog = self$mu, sdlog = self$sigma)
@@ -68,6 +75,10 @@ LogNormalShock <- R6Class(
       probs <- probs - c(0, probs[-length(probs)]) # banded probability
       probs[length(probs)] <- probs[length(probs)] + bonus 
       return(tibble(value = value, prob = probs))
+    },
+    sample = function(n) {
+      # sample n observations for simulations
+      return(rlnorm(n, meanlog = self$mu, sdlog = self$sigma))
     }
   )
 )
@@ -95,21 +106,32 @@ EmploymentShock <- R6Class(
       #self$l = l
       self$OM = OM
     },
-    mean = function(l = 1, tau = 0.02) {
+    mean = function(l = 1/0.9, L = 1) {
+      tau = self$mu_ins*self$OM/(l*L)
       return(self$mu_ins*self$OM + (1 - self$OM)*self$theta$mean()*l*(1 - tau))
     },
     var = function() {
       return(self$theta$var())
     },
-    draw = function(n, l = 1, tau = 0.02) {
+    draw = function(n, l = 1/0.9, L = 1) {
+      # draw n observations to approximate the pdf
+      tau = self$mu_ins*self$OM/(l*L)
       # For employment:
-      theta_draw <- self$theta$draw(n)
+      theta_draw <- self$theta$draw(n - 1)
       value <- theta_draw$value * l * (1 - tau)
       probs <- theta_draw$prob * (1 - self$OM)
       # For unemployment
       value <- c(self$mu_ins, value)
       probs <- c(self$OM, probs)
       return(tibble(value = value, prob = probs))
+    },
+    sample = function(n, l = 1/0.9, L = 1) {
+      # sample n observations for simulations
+      tau = self$mu_ins*self$OM/(l*L)
+      employed <- (runif(n) >= self$OM)
+      taxes <- self$theta$sample(n) * l * (1 - tau)
+      benefits <- rep(self$mu_ins, n)
+      return(benefits * (!employed) + taxes * employed)
     }
   )
 )
@@ -121,13 +143,13 @@ Cobb_Douglas <- R6Class(
     initialize = function(alpha) {
       self$alpha = alpha
     },
-    FF = function(K, L, l = 1, Z = 1) {
+    FF = function(K, L, l = 1/0.9, Z = 1) {
       return(Z*K^(self$alpha)*l*L^(1 - self$alpha))
     },
-    MPK = function(K, L, l = 1, Z = 1) {
+    MPK = function(K, L, l = 1/0.9, Z = 1) {
       return(self$alpha * Z * (K/(l*L))^(self$alpha - 1))
     },
-    MPL = function(K, L, l = 1, Z = 1) {
+    MPL = function(K, L, l = 1/0.9, Z = 1) {
       return((1 - self$alpha) * Z * (K/(l*L))^(self$alpha))
     },
     MPKk = function(k, Z = 1) {
