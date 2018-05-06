@@ -103,6 +103,7 @@ opt_pol <- function(
   utilf = Iso_Elastic$new(rho = 1),
   psi = LogNormalShock$new(),
   xi  = LogNormalShock$new(),
+  stoh_grid = NULL,
   cgrid = 40,
   ndraw = 10
 ) {
@@ -117,13 +118,15 @@ opt_pol <- function(
   r <- prodf$MPKk(future_k)
   
   # stohastic grid
-  psi_r <- psi$draw(ndraw)
-  colnames(psi_r) <- c("psi","psi_p")
-  xi_r  <- xi$draw(ndraw)
-  colnames(xi_r)  <- c("xi", "xi_p")
-  stoh_grid <- psi_r %>%
-    crossing(xi_r)
-  stoh_grid$prob <- stoh_grid$psi_p * stoh_grid$xi_p
+  if (is.null(stoh_grid)) {
+    psi_r <- psi$draw(ndraw)
+    colnames(psi_r) <- c("psi","psi_p")
+    xi_r  <- xi$draw(ndraw)
+    colnames(xi_r)  <- c("xi", "xi_p")
+    stoh_grid <- psi_r %>%
+      crossing(xi_r)
+    stoh_grid$prob <- stoh_grid$psi_p * stoh_grid$xi_p
+  }
   
   foc <- function(c) {
     # future assets for all psi-xi realizations
@@ -156,6 +159,7 @@ pf_iter <- function(
   maxiter = 50,
   fit_policy = fit_spline,
   verbose = T,
+  action = NULL,
   # model parameters
   alpha = 0.36,
   beta  = 0.985,
@@ -171,34 +175,30 @@ pf_iter <- function(
   cgrid = 40,
   ndraw = 500,
   # discretization parameters
-  max_m = 50,
-  num_out_m = 160,
-  P_bounds_k = c(1,1),
-  below_k = 1,
-  above_k = 1,
-  num_out_k = 1
-) {
-  
-  # discretize state sapce
-  m_seq <- discretize_m(
-    max_m = max_m,
-    num_out = num_out_m
-  )
-  k_seq <- discretize_k(
-    P_bounds = P_bounds_k,
-    below = below_k,
-    above = above_k,
-    num_out = num_out_k,
+  m_seq = discretize_m(
+    max_m = 50,
+    num_out = 160
+  ),
+  k_seq = discretize_k(
+    P_bounds = c(1,1),
+    below = 1,
+    above = 1,
+    num_out = 1,
     alpha = alpha,
     beta = beta,
     delta = delta
   )
+) {
   
   # initialize optimal value table
   V <- expand.grid(m_seq, k_seq)
   names(V) <- c("m","k")
-  V$value <- 0
-  V$action <- V$m*0.5 # dummy initial optimal action
+  #V$value <- 0
+  if (is.null(action)) {
+    V$action <- V$m*0.5 # dummy initial optimal action
+  } else {
+    V$action <- action # possibility to provide hot-start action
+  }
   
   # main iteration loop
   iter <- 0
@@ -208,6 +208,15 @@ pf_iter <- function(
     # recalculate policy
     oldact <- V$action
     policy <- fit_policy(V)
+    
+    # generate shock grid
+    psi_r <- psi$draw(ndraw)
+    colnames(psi_r) <- c("psi","psi_p")
+    xi_r  <- xi$draw(ndraw)
+    colnames(xi_r)  <- c("xi", "xi_p")
+    stoh_grid <- psi_r %>%
+      crossing(xi_r)
+    stoh_grid$prob <- stoh_grid$psi_p * stoh_grid$xi_p
     
     # optimal action with current continuation policy
     newacct <- sapply(
@@ -226,6 +235,7 @@ pf_iter <- function(
           utilf = utilf,
           psi = psi, 
           xi = xi,
+          stoh_grid = stoh_grid,
           cgrid = cgrid,
           ndraw = ndraw
         ) # calculate new optimal action, given current policy at next state
@@ -239,7 +249,7 @@ pf_iter <- function(
     if (verbose) cat("Completed iteration", iter, "Diff:", diff, "\n")
   }
   
-  return(list(VTable = V, policy = fit_policy(V)))
+  return(list(QTable = V, policy = fit_policy(V)))
 }
 
 
@@ -330,16 +340,16 @@ policy_plot <- function(
 #   ndraw = 200
 # )
 
-test6_1 <- pf_iter(
-  psi = LogNormalShock$new(sigma = 0.0025),
-  ndraw = 400
-)
-test6_2 <- pf_iter(
-  xi = EmploymentShock$new(sigma = 0.04),
-  ndraw = 400
-)
-test6_3 <- pf_iter(
-  xi = EmploymentShock$new(sigma = 0.04),
-  psi = LogNormalShock$new(sigma = 0.025),
-  ndraw = 60
-)  
+# test6_1 <- pf_iter(
+#   psi = LogNormalShock$new(sigma = 0.0025),
+#   ndraw = 400
+# )
+# test6_2 <- pf_iter(
+#   xi = EmploymentShock$new(sigma = 0.04),
+#   ndraw = 400
+# )
+# test6_3 <- pf_iter(
+#   xi = EmploymentShock$new(sigma = 0.04),
+#   psi = LogNormalShock$new(sigma = 0.025),
+#   ndraw = 60
+# )  
