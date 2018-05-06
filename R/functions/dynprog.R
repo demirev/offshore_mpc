@@ -279,6 +279,32 @@ policy_plot <- function(
   p 
 }
 
+policy_plot2 <- function(
+  policy, 
+  state_space,
+  main = "Policy Plot",
+  ylb = "c",
+  xlb = "m",
+  point = FALSE
+) {
+  
+  if (!point) {
+    state_space$action <- policy(state_space$m, state_space$k)
+  }
+  
+  if (length(unique(state_space$k)) == 1) {
+    p <- ggplot(data = state_space, aes(x = m, y = action)) +
+      geom_path() +
+      theme_bw() + 
+      ggtitle(main) +
+      xlab(xlb) + 
+      ylab(ylb)
+  } else {
+    stop("You haven't written this yet")
+  }
+  p 
+}
+
 # test1 <- pf_iter() # default settings - no shocks
 # 
 # test2 <- pf_iter(
