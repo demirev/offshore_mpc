@@ -1,5 +1,7 @@
 library(R6)
+library(plotly)
 library(tidyverse)
+library(ggplot2)
 
 KS_Economy <- R6Class(
   "Krussell - Smith Model of the Economy",
@@ -53,11 +55,12 @@ KS_Economy <- R6Class(
       return(L)
     },
     
-    quantileSummary = function(probs = seq(0,1,0.1), descending = T) {
+    quantileSummary = function(probs = seq(0,1,0.1), 
+                               descending = T, verbose = F) {
       allWealth <- self$Agents %>%
         lapply(
           function(agent) {
-            agent$wallets$M
+            agent$wallets$M / agent$wallets$pW # permanent income
           }
         ) %>%
         reduce(c) %>%
@@ -66,6 +69,8 @@ KS_Economy <- R6Class(
       cumWealth <- allWealth %>%
         cumsum %>%
         quantile(probs = probs)
+      
+      if (verbose) hist(allWealth)
       
       return(cumWealth / sum(allWealth))
     },
@@ -145,38 +150,70 @@ KS_Economy <- R6Class(
         #cat("Period Simulated \n")
         print(self$quantileSummary())
       }
-      return(T)
+      
+      return(self$K / self$L)
     },
     
     wealth_ss = function(tol = 0.02, maxit = 6000, minit = 500, verbose = T) {
       # simulates the economy until a steady wealth distribution is reached
       
       wealthdist <- self$quantileSummary() # initialize wealth distr
+      k_history  <- vector("numeric", maxit + 1)
       diff <- 2*tol # initialize higher than tol
       it <- 0
       while ((diff >= tol & it <= maxit) | (it <= minit)) {
+        
         # simulate 1 period
-        S <- self$step(verbose = F, fixK = T)
+        k_history[it + 1] <- self$step(verbose = F, fixK = F)
+        
         # calculate wealth distribution
         newdist <- self$quantileSummary()
+        
         # track change
         diff <- sum(abs(wealthdist - newdist))
         wealthdist <- newdist
+        
         # print progress
         if (verbose & it %% 100 == 0) {
           cat("Current Difference:", round(diff,4), "\n")
-          print(wealthdist)
+          print( self$quantileSummary(verbose = T))
           KoL <- self$K / self$L
           cat("Current K/L:", KoL, "\n")
         }
+        
         it <- it + 1
       }
-      return(self$K / self$L)
+      print(it)
+      return(k_history[(minit - 1):it]) # returns everything but the burnin
+    },
+    
+    update_policies = function(k, verbose = T) {
+      new_policies <- self$Agents %>%
+        lapply(
+          function(agent) {
+            agent$updatePolicy(
+              alpha = self$FF$alpha,
+              delta = self$delta, 
+              prodf = self$FF, 
+              ss_k = k,
+              start_action = agent$QTable$action # hot start value iteration
+            )
+          }
+        )
+      
+      if (verbose) {
+        for (agent in self$Agents) {
+          print(policy_plot2(agent$policy, agent$QTable, point = T))
+          print(agent$QTable)
+        }
+      }
+      
+      return(new_policies)
     },
     
     stohastic_optimization = function(
       k = 38.9, 
-      tol = 0.02, 
+      tol = 2, 
       lrate = .3, 
       verbose = T
     ) {
@@ -184,33 +221,55 @@ KS_Economy <- R6Class(
       # by the policy matches the one used to estimate it
       converged <- F
       
+      # initialzie law of motion guess
+      a0 <- log(k)
+      a1 <- 0.7
+      law_k <- function(logk, b0 = a0, b1 = a1) {
+        return(exp(b0 + b1*logk))
+      }
+      self$K <- k * self$L
+      
+      #browser()
       while (!converged) {
-        # 1. Calculate Policy Given steady state guess
-        update_policies <- self$Agents %>%
+        
+        # 0. Reset m
+        newWealth <- self$Agents %>%
           lapply(
             function(agent) {
-              agent$updatePolicy(
-                alpha = self$FF$alpha,
-                delta = self$delta, 
-                prodf = self$FF, 
-                ss_k = k,
-                start_action = agent$QTable$action # hot start value iteration
-              )
+              agent$wallets$M <- 0#k
             }
           )
+        
+        # 1. Calculate Policy Given steady state guess
+        update_policies <- self$update_policies(k = k, verbose = T)
+        
         # 2. Simulate
         wealth_ss <- self$wealth_ss(verbose = T)
+        
+        # update law of motion guess
+        dep <- log(wealth_ss[2:length(wealth_ss)]) # everything but the first one
+        lag <- log(wealth_ss[1:(length(wealth_ss) - 1)]) # fit against 1-lag
+        reg <- lm(dep ~ lag)
+        reg$coefficients[is.na(reg$coefficients)] <- 0 
+        a0 <- (1 - lrate)*a0 + lrate * reg$coefficients[1]
+        a1 <- (1 - lrate)*a1 + lrate * reg$coefficients[2]
+        law_k <- function(logk, b0 = a0, b1 = a1) {
+          return(exp(b0 + b1*logk))
+        }
+        
         new_k <- self$Agents %>%
           lapply(
-            
             function(agent) {
               agent$wallets$M
             }
           ) %>%
           reduce(c) %>%
           sum # implied K by agents policy
+        
         new_k <- new_k / self$L
+        
         diff <- abs(new_k - k)
+        
         if (diff < tol) {
           converged <- TRUE
         } else {
@@ -228,7 +287,83 @@ KS_Economy <- R6Class(
           cat("Iteration complete. Diff:", diff, "k's:", new_k, k, "\n")
         }
       }
+    },
+    
+    plotDist = function(nbin = 30, padTo = 120, 
+                        type = "plotly", ylimC = c(0,8), ylimW = c(0,0.25)) {
       
+      wealth <- self$Agents %>%
+        lapply(
+          function(agent) {
+            tibble(
+              m = agent$wallets$M / agent$wallets$pW,
+              beta = agent$beta
+            )
+          }
+        ) %>%
+        reduce(rbind)
+      
+      policies <- self$Agents %>%
+        lapply(
+          function(agent) {
+            maxm <- max(agent$QTable$m)
+            mpad <- seq(maxm, padTo, 1)[-1]
+            kpad <- rep(agent$QTable$k[1], length(mpad))
+            tibble(
+              m = c(agent$QTable$m, mpad),
+              c = c(agent$QTable$action, agent$policy(m = mpad, k = kpad)),
+              beta = agent$beta
+            )
+          }
+        ) %>%
+        reduce(rbind)
+      
+      if (type == "plotly") {
+        p <- plot_ly() %>%
+          add_trace(
+            x = policies$m, y = policies$c, type = 'scatter', 
+            mode = 'lines', name = 'consumption',  yaxis = 'y2',
+            line = list(color = '#45171D'), 
+            hoverinfo = "text",
+            text = policies$c
+          ) %>%
+          add_trace(
+            x = wealth$m, type = 'histogram', name = 'wealth', nbinsx = nbin,
+            marker = list(color = '#C9EFF9'),
+            histnorm = "probability"
+          ) %>%
+          layout(
+            title = 'Consumption and Wealth',
+            xaxis = list(
+              title = "m"#,
+              #range = c(0, 60)
+            ),
+            yaxis2 = list(
+              side = 'right', 
+              title = 'c', 
+              overlaying = "y",
+              showgrid = FALSE, 
+              zeroline = FALSE,
+              range = ylimC
+            ),
+            yaxis = list(
+              side = 'left', 
+              title = '', 
+              showgrid = FALSE, 
+              zeroline = FALSE,
+              range = ylimW
+            )
+          )
+      } else if (type == "ggplot") {
+        policies$panel = "Policy"
+        wealth$panel = "Wealth"
+        p <- ggplot() + 
+          facet_grid(panel ~ ., scales = "free") + 
+          geom_line(data = policies, aes(x = m, y = c), col = "red") +
+          geom_histogram(data = wealth, aes(x = m), alpha = .5, bins = nbin) +
+          theme_bw()
+      }
+      return(p)
     }
   )
 )
@@ -357,29 +492,34 @@ AgentType <- R6Class(
   )
 )
 
-testKs <- KS_Economy$new(
-  Agents = list(
-    AgentType$new(
-      M = 38.9, 
-      p = 1, 
-      l = 1/0.9,
-      L = 1,
-      psi = LogNormalShock$new(sigma = 0.025), 
-      xi = EmploymentShock$new(sigma = 0.04), 
-      utilf = Iso_Elastic$new(rho = 1),
-      pol = test6_3$policy,
-      QTable = test6_3$VTable,
-      D = 0.00625,
-      beta = 0.985,
-      n = 10000
-    )
-  ),
-  K = 38.9 * 10000, 
-  P = 1, 
-  FF = Cobb_Douglas$new(alpha = 0.36),
-  PSI = NoShock$new(mu = 1),
-  XI  = NoShock$new(mu = 1),
-  delta = 0.025 
-)
 
-testKs$stohastic_optimization()
+# kStart = 52.95991 # 38.9
+# nAgent = 10000
+# testKs <- KS_Economy$new(
+#   Agents = list(
+#     AgentType$new(
+#       M = kStart, 
+#       p = 1, 
+#       l = 1/0.9,
+#       L = 1,
+#       psi = LogNormalShock$new(sigma = 0.025), 
+#       xi = EmploymentShock$new(sigma = 0.04), 
+#       utilf = Iso_Elastic$new(rho = 1),
+#       pol = function(m, k) return(m*0.5),
+#       QTable = NULL,
+#       D = 0.00625,
+#       beta = 0.985,
+#       n = nAgent
+#     )
+#   ),
+#   K = kStart * (nAgent/0.9), 
+#   P = 1, 
+#   FF = Cobb_Douglas$new(alpha = 0.36),
+#   PSI = NoShock$new(mu = 1),
+#   XI  = NoShock$new(mu = 1),
+#   delta = 0.025 
+# )
+# 
+# #testKs$stohastic_optimization(k = kStart) #52.95991
+# testKs$update_policies(k = testKs$K / testKs$L)
+# testKs$wealth_ss(verbose = T)
