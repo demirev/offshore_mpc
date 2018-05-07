@@ -1,3 +1,7 @@
+source("R/functions/dynprog.R")
+source("R/functions/utils.R")
+source("R/classes/shocks_util_prod.R")
+
 # test1 <- pf_iter() # default settings - no shocks
 # 
 # test2 <- pf_iter(
@@ -71,4 +75,15 @@
 #   xi = EmploymentShock$new(sigma = 0.04),
 #   psi = LogNormalShock$new(sigma = 0.025),
 #   ndraw = 60
-# )  
+# ) 
+
+test7_1 <- pf_iter(
+  xi = EmploymentShock$new(sigma = 0.04),
+  psi = LogNormalShock$new(sigma = 0.025),
+  ndraw = 60,
+  m_seq = discretize_m(
+    max_m = 35,
+    num_out = 130
+  ),
+  k_seq = c(26, 38, 46, 54)
+)
