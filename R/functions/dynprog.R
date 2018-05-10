@@ -9,13 +9,14 @@ discretize_m <- function(
   mid_m <- 0.4 * max_m # a little less inportant
   
   low_num_out <- round(0.3 * num_out)
-  mid_num_out <- round(0.4 * num_out)
+  mid_num_out <- round(0.5 * num_out)
   hig_num_out <- num_out - mid_num_out - low_num_out
   
   seq_low <- seq(0, low_m, length.out = low_num_out)
   seq_mid <- seq(low_m, mid_m, length.out = mid_num_out + 1)
   seq_hig <- seq(mid_m, max_m, length.out = hig_num_out + 1)
-  return(unique(c(seq_low, seq_mid, seq_hig)))
+  #return(unique(c(seq_low, seq_mid, seq_hig)))
+  return(seq(0, max_m, length.out = num_out))
 }
 
 discretize_k <- function(
@@ -56,9 +57,9 @@ fit_loess <- function(V) {
   return(pred_func)
 }
 
-fit_spline <- function(V, df = 6) {
+fit_spline <- function(V, df = 10) {
   if (length(unique(V$k)) > 1) {
-    df_k <- min(df, length(unique(V$k)) - 1)
+    df_k <- ifelse(length(unique(V$k)) < df, 3, df)
     fit <- gam(
       action ~ s(m, k = df) + s(k, k = df_k), 
       data = V

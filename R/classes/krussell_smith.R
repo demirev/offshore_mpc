@@ -72,7 +72,12 @@ KS_Economy <- R6Class(
       
       if (verbose) hist(allWealth)
       
-      return(cumWealth / sum(allWealth))
+      return(
+        list(
+          quantiles = cumWealth / sum(allWealth),
+          x = allWealth
+        )
+      )
     },
     
     step = function(verbose = T, fixK = FALSE) {
@@ -148,16 +153,24 @@ KS_Economy <- R6Class(
       
       if (verbose) {
         #cat("Period Simulated \n")
-        print(self$quantileSummary())
+        print(self$quantileSummary()$quantiles)
       }
       
       return(self$K / self$L)
     },
     
-    wealth_ss = function(tol = 0.02, maxit = 6000, minit = 500, verbose = T) {
+    wealth_ss = function(
+      tol = 0.02, 
+      maxit = 6000, 
+      minit = 500, 
+      burnin = 200, 
+      verbose = T
+    ) {
       # simulates the economy until a steady wealth distribution is reached
       
-      wealthdist <- self$quantileSummary() # initialize wealth distr
+      wealthdist <- self$quantileSummary()$quantiles # initialize wealth distr
+      wealthx    <- self$quantileSummary()$x # test
+      
       k_history  <- vector("numeric", maxit + 1)
       diff <- 2*tol # initialize higher than tol
       it <- 0
@@ -167,16 +180,20 @@ KS_Economy <- R6Class(
         k_history[it + 1] <- self$step(verbose = F, fixK = F)
         
         # calculate wealth distribution
-        newdist <- self$quantileSummary()
+        newdist <- self$quantileSummary()$quantiles
+        newx    <- self$quantileSummary()$x
         
         # track change
         diff <- sum(abs(wealthdist - newdist))
         wealthdist <- newdist
+        kstest <- ks.test(wealthx, newx)
+        wealthx <- newx
         
         # print progress
         if (verbose & it %% 100 == 0) {
           cat("Current Difference:", round(diff,4), "\n")
-          print( self$quantileSummary(verbose = T))
+          print(self$quantileSummary(verbose = T)$quantiles)
+          print(kstest)
           KoL <- self$K / self$L
           cat("Current K/L:", KoL, "\n")
         }
@@ -184,10 +201,10 @@ KS_Economy <- R6Class(
         it <- it + 1
       }
       print(it)
-      return(k_history[(minit - 1):it]) # returns everything but the burnin
+      return(k_history[(burnin - 1):it]) # returns everything but the burnin
     },
     
-    update_policies = function(k, verbose = T) {
+    update_policies = function(k, law_k, verbose = T) {
       new_policies <- self$Agents %>%
         lapply(
           function(agent) {
@@ -196,14 +213,22 @@ KS_Economy <- R6Class(
               delta = self$delta, 
               prodf = self$FF, 
               ss_k = k,
-              start_action = agent$QTable$action # hot start value iteration
+              start_action = agent$QTable$action, # hot start value iteration
+              law_k = law_k
             )
           }
         )
       
       if (verbose) {
         for (agent in self$Agents) {
-          print(policy_plot2(agent$policy, agent$QTable, point = T))
+          p <- ggplot() + 
+            geom_line(
+              data = agent$QTable, 
+              aes(x = m, y = action, group = k, color = k)
+            ) +
+            theme_bw() +
+            scale_colour_gradient(low = "gray", high = "black")
+          print(p)
           print(agent$QTable)
         }
       }
@@ -213,19 +238,19 @@ KS_Economy <- R6Class(
     
     stohastic_optimization = function(
       k = 38.9, 
-      tol = 2, 
+      tol = .02, 
       lrate = .3, 
       verbose = T
     ) {
-      # iterates between policy estimation and simulation until the K/L implied
-      # by the policy matches the one used to estimate it
+      # iterates between policy estimation and simulation until estimated
+      # law of motion matches the actual one
       converged <- F
       
       # initialzie law of motion guess
-      a0 <- log(k)
-      a1 <- 0.7
-      law_k <- function(logk, b0 = a0, b1 = a1) {
-        return(exp(b0 + b1*logk))
+      a0 <- 0
+      a1 <- 0.85
+      law_k <- function(k, b0 = a0, b1 = a1) {
+        return(exp(b0 + b1*log(k)))
       }
       self$K <- k * self$L
       
@@ -241,50 +266,69 @@ KS_Economy <- R6Class(
           )
         
         # 1. Calculate Policy Given steady state guess
-        update_policies <- self$update_policies(k = k, verbose = T)
+        update_policies <- self$update_policies(
+          k = k, 
+          law_k = law_k, 
+          verbose = T
+        )
         
         # 2. Simulate
-        wealth_ss <- self$wealth_ss(verbose = T)
+        wealth_ss <- self$wealth_ss(verbose = T, minit = 1000)
         
-        # update law of motion guess
+        # 3. update law of motion guess
         dep <- log(wealth_ss[2:length(wealth_ss)]) # everything but the first one
         lag <- log(wealth_ss[1:(length(wealth_ss) - 1)]) # fit against 1-lag
         reg <- lm(dep ~ lag)
         reg$coefficients[is.na(reg$coefficients)] <- 0 
-        a0 <- (1 - lrate)*a0 + lrate * reg$coefficients[1]
-        a1 <- (1 - lrate)*a1 + lrate * reg$coefficients[2]
-        law_k <- function(logk, b0 = a0, b1 = a1) {
-          return(exp(b0 + b1*logk))
-        }
         
-        new_k <- self$Agents %>%
-          lapply(
-            function(agent) {
-              agent$wallets$M
-            }
-          ) %>%
-          reduce(c) %>%
-          sum # implied K by agents policy
-        
-        new_k <- new_k / self$L
-        
-        diff <- abs(new_k - k)
+        diff <- max(
+          abs(a0 - reg$coefficients[1]), 
+          abs(a1 - reg$ceofficients[2])
+        ) # update magnitude
         
         if (diff < tol) {
           converged <- TRUE
         } else {
-          if (new_k > 3*k) {
-            k <- 3*k # avoid enourmous updates
-          } else {
-            k <- (1 - lrate) * k + lrate * new_k
+          # update
+          a0 <- (1 - lrate)*a0 + lrate * reg$coefficients[1]
+          a1 <- (1 - lrate)*a1 + lrate * reg$coefficients[2]
+          law_k <- function(k, b0 = a0, b1 = a1) {
+            return(exp(b0 + b1*log(k)))
           }
         }
         
-        self$K <- k * self$L
+        # new_k <- self$Agents %>%
+        #   lapply(
+        #     function(agent) {
+        #       agent$wallets$M
+        #     }
+        #   ) %>%
+        #   reduce(c) %>%
+        #   sum # implied K by agents policy
+        # 
+        # new_k <- new_k / self$L
+        # 
+        # diff <- abs(new_k - k)
+        # 
+        # if (diff < tol) {
+        #   converged <- TRUE
+        # } else {
+        #   if (new_k > 3*k) {
+        #     k <- 3*k # avoid enourmous updates
+        #   } else {
+        #     k <- (1 - lrate) * k + lrate * new_k
+        #   }
+        # }
         
-        # 3. Message
+        self$K <- mean(wealth_ss) * self$L # for next iteration
+        
+        # 4. Message
         if (verbose) {
-          cat("Iteration complete. Diff:", diff, "k's:", new_k, k, "\n")
+          cat(
+            "Iteration complete. Diff:", diff, 
+            "coefficients:", a0, a1, 
+            "\n"
+          )
         }
       }
     },
@@ -453,14 +497,21 @@ AgentType <- R6Class(
       return(T)
     },
     
-    updatePolicy = function(alpha, delta, prodf, ss_k, start_action = NULL) {
+    updatePolicy = function(
+      alpha, 
+      delta, 
+      prodf, 
+      ss_k, 
+      start_action = NULL,
+      law_k
+    ) {
       # given parameters of the economy solves for optimal policy
       # this version assumes no aggregate shocks, so only parameter is 
       # steady state capital
       
       newPol <- pf_iter(
         # iteration parameters
-        tol = 3e-2, 
+        tol = 4e-2, 
         maxiter = 50,
         fit_policy = fit_spline,
         verbose = T,
@@ -470,7 +521,7 @@ AgentType <- R6Class(
         delta = delta,
         D = self$D,
         # model functions
-        k_law = function(k) {return(k)}, # always in steady state
+        k_law = law_k, #function(k) {return(k)}, # always in steady state
         prodf = prodf,
         utilf = self$utilf,
         psi = self$psi,
@@ -481,9 +532,9 @@ AgentType <- R6Class(
         # discretization parameters
         m_seq = discretize_m(
           max_m = 35,
-          num_out = 130
+          num_out = 45
         ),
-        k_seq = ss_k # steady state capital
+        k_seq = c(0.2*ss_k, 0.6*ss_k, ss_k, 1.5*ss_k, 3*ss_k, 5*ss_k) # around s.s. k
       )
       
       self$policy <- newPol$policy
