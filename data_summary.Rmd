@@ -266,7 +266,7 @@ tibble(
   bar_plotter(allCountries)
 ```
 
-### Net Wealth vs Liquid Assets + Offshore
+### Liquid Assets vs Liquid Assets + Offshore
 ```{r echo=FALSE, fig.width=11}
 tibble(
   liquid_assets = Gini_liquidassets,
