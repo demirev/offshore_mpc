@@ -1,6 +1,3 @@
-library(R6)
-library(tidyverse)
-
 NoShock <- R6Class(
   "Same methods as logNormal but returns const always",
   public = list(

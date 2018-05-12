@@ -76,8 +76,21 @@ source("R/classes/shocks_util_prod.R")
 #   psi = LogNormalShock$new(sigma = 0.025),
 #   ndraw = 60
 # ) 
+# 
+# test7_1 <- pf_iter(
+#   xi = EmploymentShock$new(sigma = 0.04),
+#   psi = LogNormalShock$new(sigma = 0.025),
+#   ndraw = 60,
+#   m_seq = discretize_m(
+#     max_m = 35,
+#     num_out = 130
+#   ),
+#   k_seq = c(26, 38, 46, 54)
+# )
 
-test7_1 <- pf_iter(
+
+system.time(
+test8_1 <- pf_iter(
   xi = EmploymentShock$new(sigma = 0.04),
   psi = LogNormalShock$new(sigma = 0.025),
   ndraw = 60,
@@ -85,5 +98,51 @@ test7_1 <- pf_iter(
     max_m = 35,
     num_out = 130
   ),
-  k_seq = c(26, 38, 46, 54)
+  k_seq = 40, 
+  tol = 0.025
 )
+)
+
+# test8_2 <- pf_iter(
+#   xi = EmploymentShock$new(sigma = 0.04),
+#   psi = LogNormalShock$new(sigma = 0.025),
+#   ndraw = 60,
+#   m_seq = discretize_m(
+#     max_m = 35,
+#     num_out = 130
+#   ),
+#   k_seq = 40, 
+#   action = test8_1$QTable$action, fit_policy = fit_spline2
+# )
+# 
+# 
+# fit_spline3 <- function(V, df_m = NULL, df_k = NULL) {
+#   
+#   if (is.null(df_k)) df_k <- length(unique(V$k))/3
+#   if (is.null(df_m)) df_m <- length(unique(V$m))/3
+#   
+#   if (length(unique(V$k)) > 1) {
+#     fit <- gam(
+#       action ~ lo(m, span = 10) + bs(k, span = 10), 
+#       data = V
+#     )
+#   } else {
+#     fit <- gam(
+#       action ~  lo(m, span = 10), 
+#       data = V
+#     )
+#   }
+#   
+#   pred_func <- function(m,k){
+#     if (length(m) > 1 & length(k) == 1) {
+#       k <- rep(k, length(m))
+#     }
+#     predict(fit, data.frame(m, k, value = 0), type = "response")
+#   }
+#   return(pred_func)
+# }
+# 
+# fit <- fit_spline3(test8_1$QTable, df_m = NULL)
+# 
+# policy_plot(fit, test8_1$QTable)
+
