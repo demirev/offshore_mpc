@@ -209,7 +209,7 @@ pf_iter <- function(
   V <- expand.grid(m_seq, k_seq)
   names(V) <- c("m","k")
   #V$value <- 0
-  if (is.null(action)) {
+  if (is.null(action) | length(unique(action)) == 1) {
     V$action <- V$m*0.5 # dummy initial optimal action
   } else {
     V$action <- action # possibility to provide hot-start action
