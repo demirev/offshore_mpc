@@ -1,20 +1,22 @@
+source("R/00_libraries.R")
 source("R/functions/dynprog.R")
-source("R/functions/dynprog.R")
+source("R/functions/calibration.R")
 source("R/classes/shocks_util_prod.R")
 source("R/classes/krussell_smith.R")
 
-
 # input target values -----------------------------------------------------
-
+Targets <- list(
+  AT = c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)
+)
 
 # define parameters -------------------------------------------------------
 # the below can be of-course written much more concisely, but for purposes
 # of keeping all used parameters transperent everything is spelled out
 
-run_calibration <- function(beta_mid, beta_range, beta_n) {
+run_calibration <- function(beta_mid, beta_range, beta_n = 7) {
   betas <- seq(
-    from = beta_mid - range, 
-    to = beta_mid + range, 
+    from = max(beta_mid - range, 0),
+    to = min(beta_mid + range, 1), 
     length.out = beta_n
   )
   
@@ -53,10 +55,43 @@ run_calibration <- function(beta_mid, beta_range, beta_n) {
     delta = 0.025, # depreciation
     Z = 1 # TFP
   )
+  
+  optResult <- model$optimizeStohastic(
+    k = 38.9, # initial value for capital
+    tol = .02, # tolerance for the update of k_law
+    tol_policy = .01, # tolerance for individual agent policies
+    tol_ss = .02, # tolerance for steady state wealth distribution convergence
+    lrate = .3, # speed of update for k_law
+    max_m = 35, # discretization of m-space (highest gird point)
+    num_out = 45, # discretization of m-space (number of grid points)
+    fit_policy = fit_spline, # interpolation funciton
+    verbose = F, # print detailed messages or not
+    probs = seq(0,1,0.1) # output percentiles - make sure they match Target
+  )
+  
+  return(optResult)
 }
 
 # run ---------------------------------------------------------------------
-
+calibrated_AT <- calibrate_genetic(
+  FUN = function(betaPair) {
+    run_calibration(beta_mid = betaPair[1], beta_range = betaPair[2])
+  }, # wrapper around run_calibration that takes only 1 parameter
+  lossF = lossKS(Target$AT), # function that will be used to evaluate
+  individual_generator = generateKSParams(
+    beta_mid_span = c(0.9, 0.99), 
+    beta_rng_span = c(0.01, 0.1)
+  ), # function that will generate candidate parameters
+  npop = 4, # size of population
+  nsurvive = 2, # number of survivors per generation
+  generations = 3, # number of generations to train
+  tol = 1e-2, # will stop early if loss is less than this
+  nparents = 2, # number of parents per children
+  nchild = 1, # number of children to spawn per generation
+  initial_pop = NULL, # starting population can be supplied directly
+  checkpoint = "calibration_checkpoints/test.csv", # file to write results to
+  recordOutput = T # add quantiles to file
+)
 
 
 # solve on final parameters -----------------------------------------------

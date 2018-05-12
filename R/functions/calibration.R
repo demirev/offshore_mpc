@@ -1,3 +1,24 @@
+lossKS <- function(target) {
+  # evaluates total distance between simulated and target quantiles (generator)
+  ff <- function(quantiles) {return(sum(abs(quantiles - target)))}
+  return(ff)
+}
+
+generateKSParams <- function(
+  beta_mid_span = c(0.9, 0.99), 
+  beta_rng_span = c(0.01, 0.1)
+) {
+  # generates a single couple of beta_mid and beta_range (generator)
+  param_drawer <- function() {
+    beta_mid = beta_mid_span[1] + runif(1)*(beta_mid_span[2] - beta_mid_span[1])
+    beta_rng = beta_rng_span[1] + runif(1)*(beta_rng_span[2] - beta_rng_span[1])
+    return(
+      c(beta_mid = beta_mid, beta_range = beta_rng)
+    )
+  }
+  return(param_drawer)
+}
+
 calibrate_genetic <- function(
   FUN, # function to be optimized. Returns a single object...
   lossF, # that is past to the loss function - returns a num (lower is bettter)
@@ -17,7 +38,7 @@ calibrate_genetic <- function(
   
   if (nchild + nsurvive > npop - 1) stop("Reduce children or survivors")
   if (nchild > choose(nsurvive, nparents)) stop("Too many children requested")
-  
+  browser()
   # helpers --------------------------------------------------------------------
   spawn_n <- function(n) {
     # helper - spawns n draws from individual_generaotr
@@ -52,6 +73,7 @@ calibrate_genetic <- function(
     # appends performance to csv (if needed)
     if (!is.null(checkpoint)) {
       writeColnames <- !file.exists(checkpoint)
+      names(individual) <- paste("param_", names(individual))
       toWrite <- c(individual, fitness = lossObj$loss)
       if (recordOutput) toWrite <- c(toWrite, lossObj$obj)
       toWrite <- toWrite %>%
@@ -85,7 +107,14 @@ calibrate_genetic <- function(
     population <- checkpoint %>%
       read_csv %>%
       arrange(fitness) %>%
-      slice(1:npop)
+      slice(1:npop) %>%
+      transpose %>%
+      lapply(function(member) {
+        nms <- names(member)
+        result <- reduce(member, c)
+        names(result) <- nms
+        return(result)
+      }) # some annoying data wrangling to get it in list of named vecotrs format
     population <- population["param_" %in% colnames(population)]
     colnames(population) <- str_replace(colnames(population), "param_", "")
     skipFirst <- T
@@ -96,7 +125,10 @@ calibrate_genetic <- function(
     cat("------- Training Generation", generation, "---------\n")
     print(reduce(population, rbind))
     
-    if (!skipFirst) {
+    if (!skipFirst & generation == 1) {
+      parents <- population[1:nsurvive] # if performance is loaded from 
+      #checkpoint no need to reavaluate fitness on first pass
+    } else {
       # calculate fitness
       fitness <- population %>%
         sapply(
@@ -122,9 +154,15 @@ calibrate_genetic <- function(
       parents <- population[fitness <= minfitness]
       parents <- parents[1:nsurvive] # in case of tie
       
-    } else {
-      parents <- population[1:nsurvive] # if performance is loaded from 
-      #checkpoint no need to reavaluate fitness
+      currrentBest <- population[which.min(fitness)]
+      
+      cat(
+        "^ Current best parameters are:", 
+        currentBest, 
+        "with loss:", 
+        min(fitness),
+        "\n"
+      )
     }
         
     # determine parent 'couples'
@@ -148,7 +186,9 @@ calibrate_genetic <- function(
     
     # next round's population
     population <- c(parents, children, mutants)
-    
   }
   
+  # results --------------------------------------------------------------------
+  cat("Completed", generation, "generations.")
+  return(currrentBest)
 }
