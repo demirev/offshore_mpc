@@ -174,32 +174,35 @@ KS_Economy <- R6Class(
         # simulate 1 period
         k_history[it + 1] <- self$step(verbose = F, fixK = F)
         
-        # calculate wealth distribution
-        newdist <- self$quantileSummary()$quantiles
-        newx    <- self$quantileSummary()$x
-        
-        # track change
-        diff <- sum(abs(wealthdist - newdist))
-        wealthdist <- newdist
-        kstest <- ks.test(wealthx, newx)
-        wealthx <- newx
-        
         # print progress
-        if (verbose & it %% 100 == 0) {
-          cat("Current Difference:", round(diff,4), "\n")
-          print(self$quantileSummary(verbose = T)$quantiles)
-          print(kstest)
-          KoL <- self$K / self$L
-          cat("Current K/L:", KoL, "\n")
+        if (it %% 100 == 0) {
+          # calculate wealth distribution
+          newdist <- self$quantileSummary()$quantiles
+          newx    <- self$quantileSummary()$x
+          
+          # track change
+          diff <- sum(abs(wealthdist - newdist))
+          wealthdist <- newdist
+          kstest <- ks.test(wealthx, newx)
+          wealthx <- newx
+          
+          # progress message
+          if (verbose) {
+            cat("Current Difference:", round(diff,4), "\n")
+            print(self$quantileSummary(verbose = T)$quantiles)
+            print(kstest)
+            KoL <- self$K / self$L
+            cat("Current K/L:", KoL, "\n")
+          }
+          
         }
         
         it <- it + 1
       }
-      print(it)
       return(k_history[(burnin - 1):it]) # returns everything but the burnin
     },
     
-    update_policies = function(
+    updatePolicies = function(
       k, 
       law_k, 
       verbose = T, 
@@ -209,6 +212,7 @@ KS_Economy <- R6Class(
       num_out = NULL,
       tol = 4e-2
     ) {
+      #browser()
       new_policies <- self$Agents %>%
         lapply(
           function(agent) {
@@ -230,9 +234,9 @@ KS_Economy <- R6Class(
       
       if (verbose) {
         for (agent in self$Agents) {
-          p <- agent$policy_plot()
+          p <- agent$plotPolicy()
           print(p)
-          print(agent$QTable)
+          #print(agent$QTable)
         }
       }
       
@@ -248,7 +252,8 @@ KS_Economy <- R6Class(
       max_m = NULL,
       num_out = NULL,
       fit_policy = fit_spline,
-      verbose = T
+      verbose = T,
+      probs = seq(0,1,0.1)
     ) {
       # iterates between policy estimation and simulation until estimated
       # law of motion matches the actual one
@@ -256,7 +261,7 @@ KS_Economy <- R6Class(
       
       # initialzie law of motion guess
       a0 <- 0
-      a1 <- 0.85
+      a1 <- 0.95
       law_k <- function(k, b0 = a0, b1 = a1) {
         return(exp(b0 + b1*log(k)))
       }
@@ -274,7 +279,7 @@ KS_Economy <- R6Class(
           )
         
         # 1. Calculate Policy Given steady state guess
-        update_policies <- self$update_policies(
+        update_policies <- self$updatePolicies(
           k = k, 
           law_k = law_k, 
           verbose = T, 
@@ -321,6 +326,9 @@ KS_Economy <- R6Class(
           )
         }
       }
+      
+      return(self$quantileSummary(probs = probs))
+      
     },
     
     plotDist = function(nbin = 30, padTo = 120, 
@@ -418,7 +426,7 @@ AgentType <- R6Class(
     num_out = NULL, # number of grid points on the m-grid
     
     initialize = function(
-      M = NULL, # resources on hand not-nromalized
+      M = 15, # resources on hand not-nromalized
       p = 1, # personal productivity
       l = 1, # fraction of labor supplied
       L = 1, # units of labor available
@@ -433,6 +441,9 @@ AgentType <- R6Class(
       num_out = 45, # number of grid points on the m-grid
       n = 1000
     ) {
+      
+      if (M <= 0) stop("Please initialize agents with positive wealth")
+      
       # assign fields
       self$psi <- psi
       self$xi  <- xi
@@ -509,9 +520,9 @@ AgentType <- R6Class(
       # given parameters of the economy solves for optimal policy
       # this version assumes no aggregate shocks, so only parameter is 
       # steady state capital
-      
+      #browser()
       if (!onlySS) {
-        k_seq <- c(0.2*ss_k, 0.6*ss_k, ss_k, 1.5*ss_k, 3*ss_k, 5*ss_k)
+        k_seq <- c(0.2*ss_k, 0.6*ss_k, ss_k, 1.5*ss_k, 3*ss_k)
       } else {
         k_seq <- ss_k
       }
@@ -520,8 +531,9 @@ AgentType <- R6Class(
         # iteration parameters
         tol = 4e-2, 
         maxiter = 50,
-        fit_policy = fit_policy,
-        verbose = T,
+        fit_policy = fit_policy, 
+        verbose = T, 
+        action = start_action,
         # model parameters
         alpha = alpha,
         beta  = self$beta,
