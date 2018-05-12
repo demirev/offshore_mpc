@@ -327,7 +327,7 @@ KS_Economy <- R6Class(
         }
       }
       
-      return(self$quantileSummary(probs = probs))
+      return(self$quantileSummary(probs = probs)$quantiles)
       
     },
     
