@@ -1,8 +1,3 @@
-library(R6)
-library(plotly)
-library(tidyverse)
-library(ggplot2)
-
 KS_Economy <- R6Class(
   "Krussell - Smith Model of the Economy",
   public = list(
@@ -159,7 +154,7 @@ KS_Economy <- R6Class(
       return(self$K / self$L)
     },
     
-    wealth_ss = function(
+    findWealthSS = function(
       tol = 0.02, 
       maxit = 6000, 
       minit = 500, 
@@ -204,7 +199,16 @@ KS_Economy <- R6Class(
       return(k_history[(burnin - 1):it]) # returns everything but the burnin
     },
     
-    update_policies = function(k, law_k, verbose = T) {
+    update_policies = function(
+      k, 
+      law_k, 
+      verbose = T, 
+      fit_policy = fit_spline,
+      onlySS = F,
+      max_m = NULL,
+      num_out = NULL,
+      tol = 4e-2
+    ) {
       new_policies <- self$Agents %>%
         lapply(
           function(agent) {
@@ -213,21 +217,20 @@ KS_Economy <- R6Class(
               delta = self$delta, 
               prodf = self$FF, 
               ss_k = k,
-              start_action = agent$QTable$action, # hot start value iteration
-              law_k = law_k
+              start_action = self$Agents[[1]]$QTable$action, # hot start value iteration
+              law_k = law_k, 
+              fit_policy = fit_policy, 
+              onlySS = onlySS, 
+              max_m = ifelse(is.null(max_m), agent$max_m, max_m),
+              num_out = ifelse(is.null(num_out), agent$num_out, num_out),
+              tol = tol
             )
           }
         )
       
       if (verbose) {
         for (agent in self$Agents) {
-          p <- ggplot() + 
-            geom_line(
-              data = agent$QTable, 
-              aes(x = m, y = action, group = k, color = k)
-            ) +
-            theme_bw() +
-            scale_colour_gradient(low = "gray", high = "black")
+          p <- agent$policy_plot()
           print(p)
           print(agent$QTable)
         }
@@ -236,10 +239,15 @@ KS_Economy <- R6Class(
       return(new_policies)
     },
     
-    stohastic_optimization = function(
+    optimizeStohastic = function(
       k = 38.9, 
       tol = .02, 
+      tol_policy = 4e-2,
+      tol_ss = .02,
       lrate = .3, 
+      max_m = NULL,
+      num_out = NULL,
+      fit_policy = fit_spline,
       verbose = T
     ) {
       # iterates between policy estimation and simulation until estimated
@@ -269,11 +277,16 @@ KS_Economy <- R6Class(
         update_policies <- self$update_policies(
           k = k, 
           law_k = law_k, 
-          verbose = T
+          verbose = T, 
+          fit_policy = fit_policy, 
+          onlySS = F, 
+          max_m = max_m, 
+          num_out = num_out, 
+          tol = tol_policy
         )
         
         # 2. Simulate
-        wealth_ss <- self$wealth_ss(verbose = T, minit = 1000)
+        wealth_ss <- self$findWealthSS(verbose = T, minit = 1000, tol = tol_ss)
         
         # 3. update law of motion guess
         dep <- log(wealth_ss[2:length(wealth_ss)]) # everything but the first one
@@ -296,29 +309,6 @@ KS_Economy <- R6Class(
             return(exp(b0 + b1*log(k)))
           }
         }
-        
-        # new_k <- self$Agents %>%
-        #   lapply(
-        #     function(agent) {
-        #       agent$wallets$M
-        #     }
-        #   ) %>%
-        #   reduce(c) %>%
-        #   sum # implied K by agents policy
-        # 
-        # new_k <- new_k / self$L
-        # 
-        # diff <- abs(new_k - k)
-        # 
-        # if (diff < tol) {
-        #   converged <- TRUE
-        # } else {
-        #   if (new_k > 3*k) {
-        #     k <- 3*k # avoid enourmous updates
-        #   } else {
-        #     k <- (1 - lrate) * k + lrate * new_k
-        #   }
-        # }
         
         self$K <- mean(wealth_ss) * self$L # for next iteration
         
@@ -423,7 +413,9 @@ AgentType <- R6Class(
     D = 0.00625, # probability of death
     beta = 0.985, # discount factor
     n = 1000, # number of agents for simulation
-    wallets = NULL, # holds individual information for simulating
+    wallets = NULL, # holds individual information for simulating,
+    max_m = NULL, # maximal m value for polict iteration (extrapolation after that)
+    num_out = NULL, # number of grid points on the m-grid
     
     initialize = function(
       M = NULL, # resources on hand not-nromalized
@@ -437,6 +429,8 @@ AgentType <- R6Class(
       QTable = data.frame(m = 0, k = 0, action = 0),
       D = 0.00625, # probability of death
       beta = 0.985, # discount factor
+      max_m = 35, # maximal m value for polict iteration (extrapolation after that)
+      num_out = 45, # number of grid points on the m-grid
       n = 1000
     ) {
       # assign fields
@@ -447,7 +441,9 @@ AgentType <- R6Class(
       self$QTable <- QTable
       self$D <- D
       self$beta <- beta
-      self$n
+      self$n <- n
+      self$max_m <- max_m
+      self$num_out <- num_out
       
       self$wallets <- data.frame(
         M = rep(M, n),
@@ -503,17 +499,28 @@ AgentType <- R6Class(
       prodf, 
       ss_k, 
       start_action = NULL,
-      law_k
+      law_k,
+      fit_policy = fit_spline,
+      onlySS = F,
+      max_m = self$max_m,
+      num_out = self$num_out,
+      tol = 4e-2
     ) {
       # given parameters of the economy solves for optimal policy
       # this version assumes no aggregate shocks, so only parameter is 
       # steady state capital
       
+      if (!onlySS) {
+        k_seq <- c(0.2*ss_k, 0.6*ss_k, ss_k, 1.5*ss_k, 3*ss_k, 5*ss_k)
+      } else {
+        k_seq <- ss_k
+      }
+      
       newPol <- pf_iter(
         # iteration parameters
         tol = 4e-2, 
         maxiter = 50,
-        fit_policy = fit_spline,
+        fit_policy = fit_policy,
         verbose = T,
         # model parameters
         alpha = alpha,
@@ -531,14 +538,25 @@ AgentType <- R6Class(
         ndraw = 20,
         # discretization parameters
         m_seq = discretize_m(
-          max_m = 35,
-          num_out = 45
+          max_m = max_m,
+          num_out = num_out
         ),
-        k_seq = c(0.2*ss_k, 0.6*ss_k, ss_k, 1.5*ss_k, 3*ss_k, 5*ss_k) # around s.s. k
+        k_seq = k_seq # around s.s. k
       )
       
       self$policy <- newPol$policy
       self$QTable <- newPol$QTable
+    },
+    
+    plotPolicy = function() {
+      p <- ggplot() + 
+        geom_line(
+          data = self$QTable, 
+          aes(x = m, y = action, group = k, color = k)
+        ) +
+        theme_bw() +
+        scale_colour_gradient(low = "gray", high = "black")
+      return(p)
     }
   )
 )
