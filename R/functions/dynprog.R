@@ -1,6 +1,3 @@
-library(splines)
-library(mgcv)
-
 discretize_m <- function(
   max_m = 50,
   num_out = 500
@@ -57,16 +54,19 @@ fit_loess <- function(V) {
   return(pred_func)
 }
 
-fit_spline <- function(V, df = 10) {
+fit_spline <- function(V, df_m = NULL, df_k = NULL) {
+  
+  if (is.null(df_k)) df_k <- length(unique(V$k))
+  if (is.null(df_m)) df_m <- length(unique(V$m))
+  
   if (length(unique(V$k)) > 1) {
-    df_k <- ifelse(length(unique(V$k)) < df, 3, df)
     fit <- gam(
-      action ~ s(m, k = df) + s(k, k = df_k), 
+      action ~ s(m, k = df_m) + s(k, k = df_k), 
       data = V
     )
   } else {
     fit <- gam(
-      action ~  s(m, df = df), 
+      action ~  s(m, k = df_m), 
       data = V
     )
   }
@@ -80,15 +80,18 @@ fit_spline <- function(V, df = 10) {
   return(pred_func)
 }
 
-fit_loess2 <- function(V, degree = 1) {
+fit_spline2 <- function(V, df_m = NULL, df_k = NULL) {
+  if (is.null(df_k)) df_k <- length(unique(V$k))/3
+  if (is.null(df_m)) df_m <- length(unique(V$m))/3
+  
   if (length(unique(V$k)) > 1) {
-    fit <- gam(
-      action ~ lo(m, degree = degree) + lo(k, degree = degree), 
+    fit <- lm(
+      action ~ bs(m, knots = df_m) + bs(k, knots = df_k), 
       data = V
     )
   } else {
-    fit <- gam(
-      action ~ lo(m, degree = 2), 
+    fit <- lm(
+      action ~  bs(m, knots = df_m), 
       data = V
     )
   }
@@ -97,7 +100,7 @@ fit_loess2 <- function(V, degree = 1) {
     if (length(m) > 1 & length(k) == 1) {
       k <- rep(k, length(m))
     }
-    predict(fit, data.frame(m, k, value = 0, action = 0), type = "response")
+    predict(fit, data.frame(m, k, value = 0), type = "response")
   }
   return(pred_func)
 }
@@ -167,7 +170,7 @@ opt_pol <- function(
 
 pf_iter <- function(
   # iteration parameters
-  tol = 2e-3, 
+  tol = 2e-2, 
   maxiter = 50,
   fit_policy = fit_spline,
   verbose = T,
@@ -264,34 +267,7 @@ pf_iter <- function(
   return(list(QTable = V, policy = fit_policy(V)))
 }
 
-
 policy_plot <- function(
-  policy, 
-  state_space,
-  main = "Policy Plot",
-  ylb = "c/m",
-  xlb = "m",
-  point = FALSE
-) {
-  
-  if (!point) {
-    state_space$action <- policy(state_space$m, state_space$k)
-  }
-  
-  if (length(unique(state_space$k)) == 1) {
-    p <- ggplot(data = state_space, aes(x = m, y = action/m)) +
-      geom_path() +
-      theme_bw() + 
-      ggtitle(main) +
-      xlab(xlb) + 
-      ylab(ylb)
-  } else {
-    stop("You haven't written this yet")
-  }
-  p 
-}
-
-policy_plot2 <- function(
   policy, 
   state_space,
   main = "Policy Plot",
@@ -312,7 +288,13 @@ policy_plot2 <- function(
       xlab(xlb) + 
       ylab(ylb)
   } else {
-    stop("You haven't written this yet")
+    p <- ggplot() + 
+      geom_line(
+        data = state_space, 
+        aes(x = m, y = action, group = k, color = k)
+      ) +
+      theme_bw() +
+      scale_colour_gradient(low = "gray", high = "black")
   }
   p 
 }
