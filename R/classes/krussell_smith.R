@@ -213,24 +213,39 @@ KS_Economy <- R6Class(
       tol = 4e-2
     ) {
       #browser()
-      new_policies <- self$Agents %>%
-        lapply(
-          function(agent) {
-            agent$updatePolicy(
-              alpha = self$FF$alpha,
-              delta = self$delta, 
-              prodf = self$FF, 
-              ss_k = k,
-              start_action = self$Agents[[1]]$QTable$action, # hot start value iteration
-              law_k = law_k, 
-              fit_policy = fit_policy, 
-              onlySS = onlySS, 
-              max_m = ifelse(is.null(max_m), agent$max_m, max_m),
-              num_out = ifelse(is.null(num_out), agent$num_out, num_out),
-              tol = tol
-            )
-          }
+      for (agent_no in seq(length(self$Agents))) {
+        self$Agents[[agent_no]]$updatePolicy(
+          alpha = self$FF$alpha,
+          delta = self$delta, 
+          prodf = self$FF, 
+          ss_k = k,
+          start_action = self$Agents[[max(1,agent_no - 1)]]$QTable$action, # hot start value iteration
+          law_k = law_k, 
+          fit_policy = fit_policy, 
+          onlySS = onlySS, 
+          max_m = ifelse(is.null(max_m), agent$max_m, max_m),
+          num_out = ifelse(is.null(num_out), agent$num_out, num_out),
+          tol = tol
         )
+      }
+      # new_policies <- self$Agents %>%
+      #   lapply(
+      #     function(agent) {
+      #       agent$updatePolicy(
+      #         alpha = self$FF$alpha,
+      #         delta = self$delta, 
+      #         prodf = self$FF, 
+      #         ss_k = k,
+      #         start_action = self$Agents[[1]]$QTable$action, # hot start value iteration
+      #         law_k = law_k, 
+      #         fit_policy = fit_policy, 
+      #         onlySS = onlySS, 
+      #         max_m = ifelse(is.null(max_m), agent$max_m, max_m),
+      #         num_out = ifelse(is.null(num_out), agent$num_out, num_out),
+      #         tol = tol
+      #       )
+      #     }
+      #   )
       
       if (verbose) {
         for (agent in self$Agents) {
@@ -240,7 +255,7 @@ KS_Economy <- R6Class(
         }
       }
       
-      return(new_policies)
+      return(T)
     },
     
     optimizeStohastic = function(
@@ -566,6 +581,7 @@ AgentType <- R6Class(
           data = self$QTable, 
           aes(x = m, y = action, group = k, color = k)
         ) +
+        labs(title = expression(paste(beta, "=", self$beta))) +
         theme_bw() +
         scale_colour_gradient(low = "gray", high = "black")
       return(p)
