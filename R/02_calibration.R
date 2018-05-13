@@ -6,7 +6,7 @@ source("R/classes/krussell_smith.R")
 
 # input target values -----------------------------------------------------
 Targets <- list(
-  AT = c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)
+  AT = c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)
 )
 
 # define parameters -------------------------------------------------------
@@ -15,8 +15,8 @@ Targets <- list(
 
 run_calibration <- function(beta_mid, beta_range, beta_n = 7) {
   betas <- seq(
-    from = max(beta_mid - range, 0),
-    to = min(beta_mid + range, 1), 
+    from = max(beta_mid - beta_range, 0),
+    to = min(beta_mid + beta_range, 1), 
     length.out = beta_n
   )
   
@@ -41,7 +41,7 @@ run_calibration <- function(beta_mid, beta_range, beta_n = 7) {
           utilf = Iso_Elastic$new(rho = 1), # utility function
           pol = function(m,k) return(0.5*m),
           D = 0.00625, # probability of death
-          n = 10000, # number to simulate
+          n = 3000, # number to simulate
           max_m = 35,
           num_out = 40,
           beta = beta # discount factor
@@ -77,10 +77,10 @@ calibrated_AT <- calibrate_genetic(
   FUN = function(betaPair) {
     run_calibration(beta_mid = betaPair[1], beta_range = betaPair[2])
   }, # wrapper around run_calibration that takes only 1 parameter
-  lossF = lossKS(Target$AT), # function that will be used to evaluate
+  lossF = lossKS(Targets$AT), # function that will be used to evaluate
   individual_generator = generateKSParams(
     beta_mid_span = c(0.9, 0.99), 
-    beta_rng_span = c(0.01, 0.1)
+    beta_rng_span = c(0.01, 0.05)
   ), # function that will generate candidate parameters
   npop = 4, # size of population
   nsurvive = 2, # number of survivors per generation

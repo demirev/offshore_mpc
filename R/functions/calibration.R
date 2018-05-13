@@ -38,14 +38,14 @@ calibrate_genetic <- function(
   
   if (nchild + nsurvive > npop - 1) stop("Reduce children or survivors")
   if (nchild > choose(nsurvive, nparents)) stop("Too many children requested")
-  browser()
+  
   # helpers --------------------------------------------------------------------
   spawn_n <- function(n) {
     # helper - spawns n draws from individual_generaotr
     n %>%
       seq %>%
       lapply(
-        function() {
+        function(x) {
           individual_generator()
         }
       )
@@ -73,7 +73,7 @@ calibrate_genetic <- function(
     # appends performance to csv (if needed)
     if (!is.null(checkpoint)) {
       writeColnames <- !file.exists(checkpoint)
-      names(individual) <- paste("param_", names(individual))
+      names(individual) <- paste0("param_", names(individual))
       toWrite <- c(individual, fitness = lossObj$loss)
       if (recordOutput) toWrite <- c(toWrite, lossObj$obj)
       toWrite <- toWrite %>%
@@ -113,10 +113,10 @@ calibrate_genetic <- function(
         nms <- names(member)
         result <- reduce(member, c)
         names(result) <- nms
+        result <- result[str_detect(nms, "param_")]
+        names(result) <- str_replace(names(result), "param_", "")
         return(result)
       }) # some annoying data wrangling to get it in list of named vecotrs format
-    population <- population["param_" %in% colnames(population)]
-    colnames(population) <- str_replace(colnames(population), "param_", "")
     skipFirst <- T
   }
   
@@ -125,7 +125,7 @@ calibrate_genetic <- function(
     cat("------- Training Generation", generation, "---------\n")
     print(reduce(population, rbind))
     
-    if (!skipFirst & generation == 1) {
+    if (skipFirst & generation == 1) {
       parents <- population[1:nsurvive] # if performance is loaded from 
       #checkpoint no need to reavaluate fitness on first pass
     } else {
@@ -137,13 +137,13 @@ calibrate_genetic <- function(
               FUN %>%
               lossWrapper %>%
               checkWriter(individual) %>%
-              loss_message
+              loss_message(individual)
           }
         )
       
       if (min(fitness) < tol) {
         cat("Converged to target. Best parameters are: \n")
-        cat(population[which.min(fitness)])
+        cat(population[[which.min(fitness)]])
         break()
       }
       
@@ -151,10 +151,10 @@ calibrate_genetic <- function(
       maxfitness <- sort(fitness, decreasing = F)[nsurvive]
       
       # choose survivors      
-      parents <- population[fitness <= minfitness]
+      parents <- population[fitness <= maxfitness]
       parents <- parents[1:nsurvive] # in case of tie
       
-      currrentBest <- population[which.min(fitness)]
+      currentBest <- population[[which.min(fitness)]]
       
       cat(
         "^ Current best parameters are:", 
@@ -180,6 +180,7 @@ calibrate_genetic <- function(
             give_birth # spawn the children
         }
       )
+    names(children) <- NULL
     
     # introduce some random variation
     mutants <- spawn_n(npop - nsurvive - nchild)
@@ -190,5 +191,5 @@ calibrate_genetic <- function(
   
   # results --------------------------------------------------------------------
   cat("Completed", generation, "generations.")
-  return(currrentBest)
+  return(currentBest)
 }
