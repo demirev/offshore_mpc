@@ -6,14 +6,19 @@ source("R/classes/krussell_smith.R")
 
 # input target values -----------------------------------------------------
 Targets <- list(
-  AT = c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)
+  AT = c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1),
+  IT = c(0, 70.2289, 86.8872, 94.6129, 98.5123, 1) # original cst data
 )
 
 # define parameters -------------------------------------------------------
 # the below can be of-course written much more concisely, but for purposes
 # of keeping all used parameters transperent everything is spelled out
 
-run_calibration <- function(beta_mid, beta_range, beta_n = 7) {
+run_calibration <- function(beta_mid, beta_range, beta_n = 7, 
+  sigma_psi = 0.01/4, # variance of log permanent shocks
+  sigma_xi = 0.01*4, # variance of log transitory shocks
+  probs = seq(0,1,0.1) # output percentiles - make sure they match Target
+) {
   betas <- seq(
     from = max(beta_mid - beta_range, 0),
     to = min(beta_mid + beta_range, 1), 
@@ -30,11 +35,11 @@ run_calibration <- function(beta_mid, beta_range, beta_n = 7) {
           L = 1, # units of labor available
           psi = LogNormalShock$new(
             mu = 0, 
-            sigma = 0.025
+            sigma = sigma_psi
           ), # productivity permanent shock
           xi = EmploymentShock$new(
             mu = 0, 
-            sigma = 0.04,
+            sigma = sigma_xi,
             mu_ins = 0.15, # percent insurance
             OM = 0.07 # probability of unemployment
           ), # productivity transitory shock
@@ -66,30 +71,48 @@ run_calibration <- function(beta_mid, beta_range, beta_n = 7) {
     num_out = 45, # discretization of m-space (number of grid points)
     fit_policy = fit_spline, # interpolation funciton
     verbose = F, # print detailed messages or not
-    probs = seq(0,1,0.1) # output percentiles - make sure they match Target
+    probs = probs # output percentiles - make sure they match Target
   )
   
   return(optResult)
 }
 
 # run ---------------------------------------------------------------------
-calibrated_AT <- calibrate_genetic(
+# calibrated_AT <- calibrate_genetic(
+#   FUN = function(betaPair) {
+#     run_calibration(beta_mid = betaPair[1], beta_range = betaPair[2])
+#   }, # wrapper around run_calibration that takes only 1 parameter
+#   lossF = lossKS(Targets$AT), # function that will be used to evaluate
+#   individual_generator = generateKSParams(
+#     beta_mid_span = c(0.9, 0.99), 
+#     beta_rng_span = c(0.01, 0.05)
+#   ), # function that will generate candidate parameters
+#   npop = 4, # size of population
+#   nsurvive = 2, # number of survivors per generation
+#   generations = 3, # number of generations to train
+#   tol = 1e-2, # will stop early if loss is less than this
+#   nparents = 2, # number of parents per children
+#   nchild = 1, # number of children to spawn per generation
+#   initial_pop = NULL, # starting population can be supplied directly
+#   checkpoint = "calibration_checkpoints/test.csv", # file to write results to
+#   recordOutput = T # add quantiles to file
+# )
+
+
+# a test with actual data
+calibrated_IT <- calibrate_genetic(
   FUN = function(betaPair) {
-    run_calibration(beta_mid = betaPair[1], beta_range = betaPair[2])
+    run_calibration(beta_mid = betaPair[1], beta_range = betaPair[2], 
+      sigma_xi = 0.075*4, # var xi for Italy (Carroll et al., 2014, Online Appendix, p. 6)
+      probs = seq(0, 1, 0.2) # original wealth data comes in quintiles
+    )
   }, # wrapper around run_calibration that takes only 1 parameter
-  lossF = lossKS(Targets$AT), # function that will be used to evaluate
+  lossF = lossKS(Targets$IT), # function that will be used to evaluate
   individual_generator = generateKSParams(
     beta_mid_span = c(0.9, 0.99), 
     beta_rng_span = c(0.01, 0.05)
   ), # function that will generate candidate parameters
-  npop = 4, # size of population
-  nsurvive = 2, # number of survivors per generation
-  generations = 3, # number of generations to train
-  tol = 1e-2, # will stop early if loss is less than this
-  nparents = 2, # number of parents per children
-  nchild = 1, # number of children to spawn per generation
-  initial_pop = NULL, # starting population can be supplied directly
-  checkpoint = "calibration_checkpoints/test.csv", # file to write results to
+  checkpoint = "calibration_checkpoints/italy.csv", # file to write results to
   recordOutput = T # add quantiles to file
 )
 
