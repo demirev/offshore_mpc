@@ -361,6 +361,11 @@ KS_Economy <- R6Class(
         }
       }
       
+      if (verbose > 0) {
+        mpc <- self$calcMPC()$mpc
+        cat("Completed Stochastic Optimization. Current MPC:", mpc, "\n")
+      }
+      
       return(self$quantileSummary(probs = probs)$quantiles)
       
     },
