@@ -210,21 +210,28 @@ KS_Economy <- R6Class(
       onlySS = F,
       max_m = NULL,
       num_out = NULL,
-      tol = 4e-2
+      tol = 4e-2,
+      firstpass = TRUE
     ) {
       #browser()
       for (agent_no in seq(length(self$Agents))) {
+        if (firstpass) {
+          start_from <- max(1,agent_no - 1)
+        } else {
+          start_from <- agent_no
+        }
+        
         self$Agents[[agent_no]]$updatePolicy(
           alpha = self$FF$alpha,
           delta = self$delta, 
           prodf = self$FF, 
           ss_k = k,
-          start_action = self$Agents[[max(1,agent_no - 1)]]$QTable$action, # hot start value iteration
+          start_action = self$Agents[[start_from]]$QTable$action, # hot start value iteration
           law_k = law_k, 
           fit_policy = fit_policy, 
           onlySS = onlySS, 
-          max_m = ifelse(is.null(max_m), agent$max_m, max_m),
-          num_out = ifelse(is.null(num_out), agent$num_out, num_out),
+          max_m = ifelse(is.null(max_m), self$Agents[[agent_no]]$max_m, max_m),
+          num_out = ifelse(is.null(num_out), self$Agents[[agent_no]]$num_out, num_out),
           tol = tol
         )
       }
@@ -283,6 +290,9 @@ KS_Economy <- R6Class(
       self$K <- k * self$L
       
       #browser()
+      firstpass <- TRUE # at first pass the first agent's policy will be cold
+      # started, and every other agent will start from that policy
+      
       while (!converged) {
         
         # 0. Reset m
@@ -302,8 +312,11 @@ KS_Economy <- R6Class(
           onlySS = F, 
           max_m = max_m, 
           num_out = num_out, 
-          tol = tol_policy
+          tol = tol_policy,
+          firstpass = firstpass
         )
+        firstpass <- FALSE # after the first pass each agent's policy will be
+        # hot started from their pervious policy
         
         # 2. Simulate
         wealth_ss <- self$findWealthSS(verbose = T, minit = 1000, tol = tol_ss)
@@ -343,6 +356,10 @@ KS_Economy <- R6Class(
       }
       
       return(self$quantileSummary(probs = probs)$quantiles)
+      
+    },
+    
+    calcMPC = function() {
       
     },
     
