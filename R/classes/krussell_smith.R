@@ -359,8 +359,42 @@ KS_Economy <- R6Class(
       
     },
     
-    calcMPC = function() {
+    calcMPC = function(
+      fit_policy = fit_spline,
+      at_k = self$K / self$L,
+      eps = 0.02 # epsilon increase in m leads to x% increase in spending
+    ) {
+      mpc_list <- self$Agents %>%
+        lapply(
+          function(agent) {
+            QTable <- agent$QTable %>%
+              filter(k == at_k) # only the selected capital value
+            
+            if (nrow(QTable) == 0) {
+              stop("This value of capital is not")
+            }
+            
+            policy <- fit_policy(
+              agent$QTable, 
+              df_m = length(unique(agent$QTable$m))
+            ) # interpolate again using many degrees of freedom
+            
+            m <- agent$wallets$M / agent$wallets$pW
+            
+            mpc_vector <- (
+              policy(m + eps, rep(at_k, nrow(agent$wallets))) - 
+              policy(m, rep(at_k, nrow(agent$wallets)))
+            )/eps
+            
+            return(mpc_vector)
+          }
+        )
       
+      mpc <- mpc_list %>%
+        reduce(c) %>%
+        mean
+      
+      return(list(mpc = mpc, mpc_list = mpc_list))
     },
     
     plotDist = function(nbin = 30, padTo = 120, 
