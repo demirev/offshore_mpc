@@ -4,11 +4,67 @@ source("R/functions/calibration.R")
 source("R/classes/shocks_util_prod.R")
 source("R/classes/krussell_smith.R")
 
-# input target values -----------------------------------------------------
+# input values -----------------------------------------------------------
 Targets <- list(
-  AT = c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1),
-  IT = c(0, 70.2289, 86.8872, 94.6129, 98.5123, 1) # original cst data
+  # Original CST data
+  AT_cst = c(0, 78.8513, 91.7883, 96.6797, 99.0731, 1),
+  BE_cst = c(0, 62.7084, 81.8823, 92.2391, 97.9084, 1),
+  CY_cst = c(0, 72.098, 88.0831, 95.1412, 98.6535, 1),
+  DE_cst = c(0, 81.2646, 92.2557, 96.8536, 99.1951, 1),
+  ES_cst = c(0, 60.7636, 80.5163, 91.6185, 97.8128, 1),
+  FI_cst = c(0, 72.2088, 88.1598, 95.2109, 98.6785, 1),
+  FR_cst = c(0, 70.3265, 86.7258, 94.5155, 98.5333, 1),
+  GR_cst = c(0, 57.9778, 78.7277, 90.8523, 97.647, 1),
+  IT_cst = c(0, 63.4341, 82.1672, 92.3771, 98.0074, 1),
+  LU_cst = c(0, 70.2289, 86.8872, 94.6129, 98.5123, 1),
+  MT_cst = c(0, 63.005, 82.0733, 92.331, 97.9327, 1),
+  NL_cst = c(0, 67.8301, 85.3827, 93.9355, 98.3406, 1),
+  PT_cst = c(0, 65.3448, 83.6945, 93.1091, 98.1161, 1),
+  SI_cst = c(0, 57.9083, 78.7128, 90.8434, 97.6431, 1),
+  SK_cst = c(0, 54.9003, 76.8789, 90.1142, 97.5149, 1)
 )
+
+# Betas found by CST
+betas_cst <- list(
+  AT = c(beta_mid=0.988477, beta_range=0.0013),
+  BE = c(beta_mid=0.98975, beta_range=0.0005),
+  CY = c(beta_mid=0.989225, beta_range=0.0009),
+  DE = c(beta_mid=0.986959, beta_range=0.0019),
+  ES = c(beta_mid=0.9896, beta_range=0.0005),
+  FI = c(beta_mid=0.9893, beta_range=0.0009),
+  FR = c(beta_mid=0.98915, beta_range=0.0009),
+  GR = c(beta_mid=0.9899, beta_range=0.0003),
+  IT = c(beta_mid=0.989225, beta_range=0.0007),
+  LU = c(beta_mid=0.989375, beta_range=0.0008),
+  MT = c(beta_mid=0.98975, beta_range=0.0005),
+  NL = c(beta_mid=0.9896, beta_range=0.0007),
+  PT = c(beta_mid=0.98963, beta_range=0.0006),
+  SI = c(beta_mid=0.9899, beta_range=0.0003),
+  SK = c(beta_mid=0.989975, beta_range=-8.13152E-20)
+)
+
+# Parameter values
+# Obtained from (Carroll et al., 2014, Online Appendix, p. 6)
+default_sigma_psi = 0.01/4
+default_sigma_xi = 0.01*4
+parameters <- list(
+  AT = c(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
+  BE = c(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
+  CY = c(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
+  DE = c(sigma_psi=default_sigma_psi, sigma_xi=0.05*4),
+  ES = c(sigma_psi=default_sigma_psi, sigma_xi=0.05*4),
+  FI = c(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
+  FR = c(sigma_psi=default_sigma_psi, sigma_xi=0.031*4),
+  GR = c(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
+  IT = c(sigma_psi=default_sigma_psi, sigma_xi=0.075*4),
+  LU = c(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
+  MT = c(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
+  NL = c(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
+  PT = c(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
+  SI = c(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
+  SK = c(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi)
+)
+
 
 # define parameters -------------------------------------------------------
 # the below can be of-course written much more concisely, but for purposes
@@ -103,11 +159,11 @@ run_calibration <- function(beta_mid, beta_range, beta_n = 7,
 calibrated_IT <- calibrate_genetic(
   FUN = function(betaPair) {
     run_calibration(beta_mid = betaPair[1], beta_range = betaPair[2], 
-      sigma_xi = 0.075*4, # var xi for Italy (Carroll et al., 2014, Online Appendix, p. 6)
+      sigma_xi = parameters$IT["sigma_psi"], 
       probs = seq(0, 1, 0.2) # original wealth data comes in quintiles
     )
   }, # wrapper around run_calibration that takes only 1 parameter
-  lossF = lossKS(Targets$IT), # function that will be used to evaluate
+  lossF = lossKS(Targets$IT_cst), # function that will be used to evaluate
   individual_generator = generateKSParams(
     beta_mid_span = c(0.9, 0.99), 
     beta_rng_span = c(0.01, 0.05)
