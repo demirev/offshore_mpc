@@ -274,7 +274,7 @@ KS_Economy <- R6Class(
       max_m = NULL,
       num_out = NULL,
       fit_policy = fit_spline,
-      verbose = T,
+      verbose = 2,
       probs = seq(0,1,0.1)
     ) {
       # iterates between policy estimation and simulation until estimated
@@ -307,7 +307,7 @@ KS_Economy <- R6Class(
         update_policies <- self$updatePolicies(
           k = k, 
           law_k = law_k, 
-          verbose = T, 
+          verbose = (verbose > 0), 
           fit_policy = fit_policy, 
           onlySS = F, 
           max_m = max_m, 
@@ -319,7 +319,11 @@ KS_Economy <- R6Class(
         # hot started from their pervious policy
         
         # 2. Simulate
-        wealth_ss <- self$findWealthSS(verbose = T, minit = 1000, tol = tol_ss)
+        wealth_ss <- self$findWealthSS(
+          verbose = (verbose > 1), 
+          minit = 1000, 
+          tol = tol_ss
+        )
         
         # 3. update law of motion guess
         dep <- log(wealth_ss[2:length(wealth_ss)]) # everything but the first one
@@ -346,12 +350,14 @@ KS_Economy <- R6Class(
         self$K <- mean(wealth_ss) * self$L # for next iteration
         
         # 4. Message
-        if (verbose) {
+        if (verbose > 0) {
           cat(
             "Iteration complete. Diff:", diff, 
             "coefficients:", a0, a1, 
+            "K/L:", self$K / self$L,
             "\n"
           )
+          self$plotDist()
         }
       }
       
@@ -391,8 +397,9 @@ KS_Economy <- R6Class(
       return(list(mpc = mpc, mpc_list = mpc_list))
     },
     
-    plotDist = function(nbin = 30, padTo = 120, 
-                        type = "plotly", ylimC = c(0,8), ylimW = c(0,0.25)) {
+    plotDist = function(nbin = 30, padTo = 120, k = self$K / self$L, 
+                        colr = c("gray","black"), colr2 = c("gray", "black"),
+                        type = "ggplot", ylimC = c(0,8), ylimW = c(0,0.25)) {
       
       wealth <- self$Agents %>%
         lapply(
@@ -408,12 +415,18 @@ KS_Economy <- R6Class(
       policies <- self$Agents %>%
         lapply(
           function(agent) {
-            maxm <- max(agent$QTable$m)
+            
+            k_target <- unique(agent$QTable$k)
+            k_target <- k_target[which.min(abs(k_target - k))]
+            Q_target <- agent$QTable[agent$QTable$k == k_target, ]
+            
+            maxm <- max(Q_target$m)
             mpad <- seq(maxm, padTo, 1)[-1]
-            kpad <- rep(agent$QTable$k[1], length(mpad))
+            kpad <- rep(k_target, length(mpad))
             tibble(
-              m = c(agent$QTable$m, mpad),
-              c = c(agent$QTable$action, agent$policy(m = mpad, k = kpad)),
+              m = c(Q_target$m, mpad),
+              k = c(Q_target$k, kpad),
+              c = c(Q_target$action, agent$policy(m = mpad, k = kpad)),
               beta = agent$beta
             )
           }
@@ -421,17 +434,20 @@ KS_Economy <- R6Class(
         reduce(rbind)
       
       if (type == "plotly") {
+        pallt <- colorRampPalette(col = colr)(length(unique(policies$beta)))
+        pallt2 <- colorRampPalette(col = colr2)(length(unique(policies$beta)))
         p <- plot_ly() %>%
           add_trace(
             x = policies$m, y = policies$c, type = 'scatter', 
-            mode = 'lines', name = 'consumption',  yaxis = 'y2',
-            line = list(color = '#45171D'), 
+            color = as.factor(policies$beta),
+            mode = 'lines', name = 'consumption',  yaxis = 'y2', colors = pallt,
+            #line = list(color = '#45171D'), 
             hoverinfo = "text",
             text = policies$c
           ) %>%
           add_trace(
             x = wealth$m, type = 'histogram', name = 'wealth', nbinsx = nbin,
-            marker = list(color = '#C9EFF9'),
+            color = as.factor(wealth$beta), colors = pallt2,
             histnorm = "probability"
           ) %>%
           layout(
@@ -461,9 +477,17 @@ KS_Economy <- R6Class(
         wealth$panel = "Wealth"
         p <- ggplot() + 
           facet_grid(panel ~ ., scales = "free") + 
-          geom_line(data = policies, aes(x = m, y = c), col = "red") +
-          geom_histogram(data = wealth, aes(x = m), alpha = .5, bins = nbin) +
-          theme_bw()
+          geom_line(
+            data = policies, 
+            aes(x = m, y = c, color = as.factor(beta))
+          ) +
+          geom_histogram(
+            data = wealth, 
+            aes(x = m, fill = as.factor(beta)), alpha = .5, bins = nbin
+          ) +
+          theme_bw() +
+          scale_color_grey() + 
+          scale_fill_grey()
       }
       return(p)
     }
