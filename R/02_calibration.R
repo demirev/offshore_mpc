@@ -126,7 +126,7 @@ run_calibration <- function(beta_mid, beta_range, beta_n = 7,
     max_m = 35, # discretization of m-space (highest gird point)
     num_out = 45, # discretization of m-space (number of grid points)
     fit_policy = fit_spline, # interpolation funciton
-    verbose = F, # print detailed messages or not
+    verbose = 1, # print detailed messages or not
     probs = probs # output percentiles - make sure they match Target
   )
   
