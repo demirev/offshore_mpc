@@ -357,7 +357,8 @@ KS_Economy <- R6Class(
             "K/L:", self$K / self$L,
             "\n"
           )
-          self$plotDist()
+          p <- self$plotDist()
+          print(p)
         }
       }
       
