@@ -104,33 +104,51 @@ calibrate_genetic <- function(
     skipFirst <- F
   } else {
     # choose population from checkpoint. Don't evaluate initial
-    population <- checkpoint %>%
-      read_csv %>%
-      arrange(fitness) %>%
-      slice(1:npop) %>%
-      transpose %>%
-      lapply(function(member) {
-        nms <- names(member)
-        result <- reduce(member, c)
-        names(result) <- nms
-        result <- result[str_detect(nms, "param_")]
-        names(result) <- str_replace(names(result), "param_", "")
-        return(result)
-      }) # some annoying data wrangling to get it in list of named vecotrs format
-    skipFirst <- T
+    checkpoint_file <- checkpoint %>%
+      read_csv
+    
+    if (nrow(checkpoint_file) >= npop) {
+      population <- checkpoint %>%
+        read_csv %>%
+        arrange(fitness) %>%
+        slice(1:npop) 
+      
+      fitness <- population$fitness
+      
+      population <- population %>%
+        transpose %>%
+        lapply(function(member) {
+          nms <- names(member)
+          result <- reduce(member, c)
+          names(result) <- nms
+          result <- result[str_detect(nms, "param_")]
+          names(result) <- str_replace(names(result), "param_", "")
+          return(result)
+        }) # some annoying data wrangling to get it in list of named vecotrs format
+      skipFirst <- T
+    } else {
+      population <- spawn_n(npop)
+      skipFirst <- F
+    }
+    
   }
   
   # main loop ------------------------------------------------------------------
   for (generation in seq(generations)) {
+    print(paste0(Sys.time(), "-------------------------------------------"))
     cat("------- Training Generation", generation, "---------\n")
     print(reduce(population, rbind))
     
     if (skipFirst & generation == 1) {
       parents <- population[1:nsurvive] # if performance is loaded from 
       #checkpoint no need to reavaluate fitness on first pass
+      parents_fitness <- fitness[1:nsurvive]
     } else {
       # calculate fitness
-      fitness <- population %>%
+      fitness <- switch(as.character(as.numeric(generation == 1)),
+        "1" = population,
+        "0" = c(children, mutants) # no need to evaluate the parents twice
+      ) %>%
         sapply(
           function(individual) {
             individual %>%
@@ -140,6 +158,8 @@ calibrate_genetic <- function(
               loss_message(individual)
           }
         )
+      
+      if (generation > 1) fitness <- c(parents_fitness, fitness)
       
       if (min(fitness) < tol) {
         cat("Converged to target. Best parameters are: \n")
@@ -152,7 +172,9 @@ calibrate_genetic <- function(
       
       # choose survivors      
       parents <- population[fitness <= maxfitness]
+      parents_fitness <- fitness[fitness <= maxfitness]
       parents <- parents[1:nsurvive] # in case of tie
+      parents_fitness <- parents_fitness[1:nsurvive]
       
       currentBest <- population[[which.min(fitness)]]
       

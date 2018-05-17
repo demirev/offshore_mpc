@@ -7,21 +7,21 @@ source("R/classes/krussell_smith.R")
 # input values -----------------------------------------------------------
 Targets <- list(
   # Original CST data
-  AT_cst = c(0, 78.8513, 91.7883, 96.6797, 99.0731, 1),
-  BE_cst = c(0, 62.7084, 81.8823, 92.2391, 97.9084, 1),
-  CY_cst = c(0, 72.098, 88.0831, 95.1412, 98.6535, 1),
-  DE_cst = c(0, 81.2646, 92.2557, 96.8536, 99.1951, 1),
-  ES_cst = c(0, 60.7636, 80.5163, 91.6185, 97.8128, 1),
-  FI_cst = c(0, 72.2088, 88.1598, 95.2109, 98.6785, 1),
-  FR_cst = c(0, 70.3265, 86.7258, 94.5155, 98.5333, 1),
-  GR_cst = c(0, 57.9778, 78.7277, 90.8523, 97.647, 1),
-  IT_cst = c(0, 63.4341, 82.1672, 92.3771, 98.0074, 1),
-  LU_cst = c(0, 70.2289, 86.8872, 94.6129, 98.5123, 1),
-  MT_cst = c(0, 63.005, 82.0733, 92.331, 97.9327, 1),
-  NL_cst = c(0, 67.8301, 85.3827, 93.9355, 98.3406, 1),
-  PT_cst = c(0, 65.3448, 83.6945, 93.1091, 98.1161, 1),
-  SI_cst = c(0, 57.9083, 78.7128, 90.8434, 97.6431, 1),
-  SK_cst = c(0, 54.9003, 76.8789, 90.1142, 97.5149, 1)
+  AT_cst = c(0, 78.8513, 91.7883, 96.6797, 99.0731, 100)/100,
+  BE_cst = c(0, 62.7084, 81.8823, 92.2391, 97.9084, 100)/100,
+  CY_cst = c(0, 72.098, 88.0831, 95.1412, 98.6535, 100)/100,
+  DE_cst = c(0, 81.2646, 92.2557, 96.8536, 99.1951, 100)/100,
+  ES_cst = c(0, 60.7636, 80.5163, 91.6185, 97.8128, 100)/100,
+  FI_cst = c(0, 72.2088, 88.1598, 95.2109, 98.6785, 100)/100,
+  FR_cst = c(0, 70.3265, 86.7258, 94.5155, 98.5333, 100)/100,
+  GR_cst = c(0, 57.9778, 78.7277, 90.8523, 97.647, 100)/100,
+  IT_cst = c(0, 63.4341, 82.1672, 92.3771, 98.0074, 100)/100,
+  LU_cst = c(0, 70.2289, 86.8872, 94.6129, 98.5123, 100)/100,
+  MT_cst = c(0, 63.005, 82.0733, 92.331, 97.9327, 100)/100,
+  NL_cst = c(0, 67.8301, 85.3827, 93.9355, 98.3406, 100)/100,
+  PT_cst = c(0, 65.3448, 83.6945, 93.1091, 98.1161, 100)/100,
+  SI_cst = c(0, 57.9083, 78.7128, 90.8434, 97.6431, 100)/100,
+  SK_cst = c(0, 54.9003, 76.8789, 90.1142, 97.5149, 100)/100
 )
 
 # Betas found by CST
@@ -67,9 +67,6 @@ parameters <- list(
 
 
 # define parameters -------------------------------------------------------
-# the below can be of-course written much more concisely, but for purposes
-# of keeping all used parameters transperent everything is spelled out
-
 run_calibration <- function(beta_mid, beta_range, beta_n = 7, 
   sigma_psi = 0.01/4, # variance of log permanent shocks
   sigma_xi = 0.01*4, # variance of log transitory shocks
@@ -134,28 +131,9 @@ run_calibration <- function(beta_mid, beta_range, beta_n = 7,
 }
 
 # run ---------------------------------------------------------------------
-# calibrated_AT <- calibrate_genetic(
-#   FUN = function(betaPair) {
-#     run_calibration(beta_mid = betaPair[1], beta_range = betaPair[2])
-#   }, # wrapper around run_calibration that takes only 1 parameter
-#   lossF = lossKS(Targets$AT), # function that will be used to evaluate
-#   individual_generator = generateKSParams(
-#     beta_mid_span = c(0.9, 0.99), 
-#     beta_rng_span = c(0.01, 0.05)
-#   ), # function that will generate candidate parameters
-#   npop = 4, # size of population
-#   nsurvive = 2, # number of survivors per generation
-#   generations = 3, # number of generations to train
-#   tol = 1e-2, # will stop early if loss is less than this
-#   nparents = 2, # number of parents per children
-#   nchild = 1, # number of children to spawn per generation
-#   initial_pop = NULL, # starting population can be supplied directly
-#   checkpoint = "calibration_checkpoints/test.csv", # file to write results to
-#   recordOutput = T # add quantiles to file
-# )
 
-
-# a test with actual data
+#  Using the quantiles from CST ----
+sink("calibration_checkpoints/log_IT20.txt")
 calibrated_IT <- calibrate_genetic(
   FUN = function(betaPair) {
     run_calibration(beta_mid = betaPair[1], beta_range = betaPair[2], 
@@ -166,12 +144,42 @@ calibrated_IT <- calibrate_genetic(
   lossF = lossKS(Targets$IT_cst), # function that will be used to evaluate
   individual_generator = generateKSParams(
     beta_mid_span = c(0.9, 0.99), 
-    beta_rng_span = c(0.01, 0.05)
+    beta_rng_span = c(0.0001, 0.02)
   ), # function that will generate candidate parameters
-  checkpoint = "calibration_checkpoints/italy.csv", # file to write results to
+  npop = 10, # size of population
+  nsurvive = 4, # number of survivors per generation
+  generations = 5, # number of generations to train
+  tol = 1e-2, # will stop early if loss is less than this
+  nparents = 2, # number of parents per children
+  nchild = 4,
+  checkpoint = "calibration_checkpoints/italy_20.csv", # file to write results to
   recordOutput = T # add quantiles to file
 )
+sink(NULL)
 
+sink("calibration_checkpoints/log_ES20.txt")
+calibrated_ES <- calibrate_genetic(
+  FUN = function(betaPair) {
+    run_calibration(beta_mid = betaPair[1], beta_range = betaPair[2], 
+                    sigma_xi = parameters$ES["sigma_psi"], 
+                    probs = seq(0, 1, 0.2) # original wealth data comes in quintiles
+    )
+  }, # wrapper around run_calibration that takes only 1 parameter
+  lossF = lossKS(Targets$ES_cst), # function that will be used to evaluate
+  individual_generator = generateKSParams(
+    beta_mid_span = c(0.9, 0.99), 
+    beta_rng_span = c(0.0001, 0.02)
+  ), # function that will generate candidate parameters
+  npop = 10, # size of population
+  nsurvive = 4, # number of survivors per generation
+  generations = 5, # number of generations to train
+  tol = 1e-2, # will stop early if loss is less than this
+  nparents = 2, # number of parents per children
+  nchild = 4,
+  checkpoint = "calibration_checkpoints/spain_20.csv", # file to write results to
+  recordOutput = T # add quantiles to file
+)
+sink(NULL)
 
 # solve on final parameters -----------------------------------------------
 
