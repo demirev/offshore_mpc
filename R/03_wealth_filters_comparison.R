@@ -9,7 +9,7 @@ source("R/functions/descriptives.R")
 
 # Prepare Data ------------------------------------------------------------
 # import
-targetdir <- "data/HFCS_UDB_1_3_ASCII/"
+targetdir <- "data/HFCS_UDB_1_2_ASCII/"
 Pfiles <- importType(dir = targetdir, type = "P")
 Hfiles <- importType(dir = targetdir, type = "H")
 Dfiles <- importType(dir = targetdir, type = "D")
@@ -231,4 +231,4 @@ quintiles$age_negative_income <- rbind(
 )
 
 # save quintile data
-save(quintiles, file = "data/generated/quintiles_filters_13.RData")
+save(quintiles, file = "data/generated/quintiles_filters_12.RData")
