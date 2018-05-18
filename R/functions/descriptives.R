@@ -190,13 +190,13 @@ calc_offshore2 <- function(
 }
 
 # Filters -----------------------------------------------------------------
-filter_age <- function(dset) {
+filter_age <- function(dset, wealthvar) {
   dset %>%
     filter((age >= 25 & age <= 60) |
              country == "MT" & age_bin >= 6 & age_bin < 13)
 }
 
-filter_income <- function(dset) {
+filter_income <- function(dset, wealthvar) {
   dset %>%
     filter(permanent_income_flag == 2 | country %in% c("FR","FI")) 
 }
@@ -207,14 +207,14 @@ filter_negative <- function(dset, wealthvar) {
 
 filter_both <- function(dset, wealthvar) {
   dset %>%
-    filter_age %>%
+    filter_age(wealthvar) %>%
     filter_negative(wealthvar)
 }
 
 filter_three <- function(dset, wealthvar) {
   dset %>%
     filter_both(wealthvar) %>%
-    filter_income
+    filter_income(wealthvar)
 }
 
 omni_filt <- function(dset, cntr = NULL, 
