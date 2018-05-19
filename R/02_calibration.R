@@ -133,7 +133,7 @@ run_calibration <- function(beta_mid, beta_range, beta_n = 7,
 # run ---------------------------------------------------------------------
 
 #  Using the quantiles from CST ----
-sink("calibration_checkpoints/log_IT20.txt")
+sink("calibration_checkpoints/log_IT20.txt", append = T, split = T)
 calibrated_IT <- calibrate_genetic(
   FUN = function(betaPair) {
     run_calibration(beta_mid = betaPair[1], beta_range = betaPair[2], 
@@ -143,21 +143,21 @@ calibrated_IT <- calibrate_genetic(
   }, # wrapper around run_calibration that takes only 1 parameter
   lossF = lossKS(Targets$IT_cst), # function that will be used to evaluate
   individual_generator = generateKSParams(
-    beta_mid_span = c(0.9, 0.99), 
-    beta_rng_span = c(0.0001, 0.02)
+    beta_mid_span = c(0.97, 0.99), 
+    beta_rng_span = c(0.0001, 0.003)
   ), # function that will generate candidate parameters
   npop = 10, # size of population
   nsurvive = 4, # number of survivors per generation
   generations = 5, # number of generations to train
   tol = 1e-2, # will stop early if loss is less than this
-  nparents = 2, # number of parents per children
-  nchild = 4,
+  nparents = 3, # number of parents per children
+  nchild = 2,
   checkpoint = "calibration_checkpoints/italy_20.csv", # file to write results to
   recordOutput = T # add quantiles to file
 )
 sink(NULL)
 
-sink("calibration_checkpoints/log_ES20.txt")
+sink("calibration_checkpoints/log_ES20.txt", append = T, split = T)
 calibrated_ES <- calibrate_genetic(
   FUN = function(betaPair) {
     run_calibration(beta_mid = betaPair[1], beta_range = betaPair[2], 
@@ -167,15 +167,15 @@ calibrated_ES <- calibrate_genetic(
   }, # wrapper around run_calibration that takes only 1 parameter
   lossF = lossKS(Targets$ES_cst), # function that will be used to evaluate
   individual_generator = generateKSParams(
-    beta_mid_span = c(0.9, 0.99), 
-    beta_rng_span = c(0.0001, 0.02)
+    beta_mid_span = c(0.97, 0.99), 
+    beta_rng_span = c(0.0001, 0.003)
   ), # function that will generate candidate parameters
   npop = 10, # size of population
   nsurvive = 4, # number of survivors per generation
   generations = 5, # number of generations to train
   tol = 1e-2, # will stop early if loss is less than this
-  nparents = 2, # number of parents per children
-  nchild = 4,
+  nparents = 3, # number of parents per children
+  nchild = 2,
   checkpoint = "calibration_checkpoints/spain_20.csv", # file to write results to
   recordOutput = T # add quantiles to file
 )
