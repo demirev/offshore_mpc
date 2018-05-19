@@ -25,6 +25,7 @@ var_dict <- list(
   net_wealth = "DN3001",
   deposits   = "DA2101",
   mutual_funds = "DA2102",
+  bonds = "DA2103",
   business_wealth = "DA2104",
   shares = "DA2105",
   managed_accounts = "DA2106",
@@ -100,7 +101,7 @@ Wealthfiles <- Dfiles %>%
         income = total_income,
         net_wealth = net_wealth,
         liquid_assets = deposits + mutual_funds + business_wealth +
-          shares + managed_accounts + life_insurance,
+          shares + managed_accounts + life_insurance + bonds,
         weight = household_weight,
         permanent_income_flag = permanent_income_flag
       ) %>%
