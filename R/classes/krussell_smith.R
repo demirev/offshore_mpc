@@ -392,6 +392,8 @@ KS_Economy <- R6Class(
               policy(m, rep(k, nrow(agent$wallets)))
             )/eps
             
+            mpc_vector <- 1 - (1 - mpc_vector)^4 # to annually
+            
             return(mpc_vector)
           }
         )
