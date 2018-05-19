@@ -131,7 +131,7 @@ calibrated_net <- calibrate_genetic(
       probs = seq(0, 1, 0.1) # deciles 
     )
   }, # wrapper around run_calibration that takes only 1 parameter
-  lossF = lossKS(Targets$net[country,]), # function that will be used to evaluate
+  lossF = lossKS(Targets$liq[country,]), # function that will be used to evaluate
   individual_generator = generateKSParams(
     beta_mid_span = c(0.97, 0.99), 
     beta_rng_span = c(0.0001, 0.003)
@@ -139,7 +139,7 @@ calibrated_net <- calibrate_genetic(
   npop = 10, # size of population
   nsurvive = 4, # number of survivors per generation
   generations = 5, # number of generations to train
-  tol = 1e-2, # will stop early if loss is less than this
+  tol = 5e-2, # will stop early if loss is less than this
   nparents = 3, # number of parents per children
   nchild = 2,
   checkpoint = str_glue("calibration_checkpoints/{country}_net.csv"), # file to write results to
@@ -159,7 +159,7 @@ calibrated_net_off <- calibrate_genetic(
       probs = seq(0, 1, 0.1) # deciles 
     )
   }, # wrapper around run_calibration that takes only 1 parameter
-  lossF = lossKS(Targets$net_offshore[country,]), # function that will be used to evaluate
+  lossF = lossKS(Targets$liq_offshore[country,]), # function that will be used to evaluate
   individual_generator = generateKSParams(
     beta_mid_span = c(0.97, 0.99), 
     beta_rng_span = c(0.0001, 0.003)
@@ -167,7 +167,7 @@ calibrated_net_off <- calibrate_genetic(
   npop = 10, # size of population
   nsurvive = 4, # number of survivors per generation
   generations = 5, # number of generations to train
-  tol = 1e-2, # will stop early if loss is less than this
+  tol = 5e-2, # will stop early if loss is less than this
   nparents = 3, # number of parents per children
   nchild = 2,
   checkpoint = str_glue("calibration_checkpoints/{country}_net_off.csv"), # file to write results to
