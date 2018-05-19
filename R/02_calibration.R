@@ -119,11 +119,11 @@ run_calibration <- function(beta_mid, beta_range, beta_n = 7,
 
 country <- "IT" # <------------------ change this to the desired country
 
-# Net wealth, without offshore ----
+# Liquid assets, without offshore ----
 date = format(Sys.time(), "%y%m%d")
-sink(str_glue("calibration_checkpoints/log_{country}_net_{date}.txt"), 
+sink(str_glue("calibration_checkpoints/log_{country}_liq_{date}.txt"), 
      append = T, split = T)
-calibrated_net <- calibrate_genetic(
+calibrated_liq <- calibrate_genetic(
   FUN = function(betaPair) {
     run_calibration(
       beta_mid = betaPair[1], beta_range = betaPair[2], 
@@ -142,16 +142,16 @@ calibrated_net <- calibrate_genetic(
   tol = 5e-2, # will stop early if loss is less than this
   nparents = 3, # number of parents per children
   nchild = 2,
-  checkpoint = str_glue("calibration_checkpoints/{country}_net.csv"), # file to write results to
+  checkpoint = str_glue("calibration_checkpoints/{country}_liq.csv"), # file to write results to
   recordOutput = T # add quantiles to file
 )
 sink(NULL)
 
-# Net wealth, with offshore ----
+# Liquid assets, with offshore ----
 date = format(Sys.time(), "%y%m%d")
-sink(str_glue("calibration_checkpoints/log_{country}_net_off_{date}.txt"), 
+sink(str_glue("calibration_checkpoints/log_{country}_liq_off_{date}.txt"), 
      append = T, split = T)
-calibrated_net_off <- calibrate_genetic(
+calibrated_liq_off <- calibrate_genetic(
   FUN = function(betaPair) {
     run_calibration(
       beta_mid = betaPair[1], beta_range = betaPair[2], 
@@ -170,7 +170,7 @@ calibrated_net_off <- calibrate_genetic(
   tol = 5e-2, # will stop early if loss is less than this
   nparents = 3, # number of parents per children
   nchild = 2,
-  checkpoint = str_glue("calibration_checkpoints/{country}_net_off.csv"), # file to write results to
+  checkpoint = str_glue("calibration_checkpoints/{country}_liq_off.csv"), # file to write results to
   recordOutput = T # add quantiles to file
 )
 sink(NULL)
