@@ -193,7 +193,7 @@ calc_offshore2 <- function(
 # Filters -----------------------------------------------------------------
 filter_age <- function(dset, wealthvar) {
   dset %>%
-    filter((age >= 25 & age <= 60) |
+    filter((age > 25 & age <= 60) |
              country == "MT" & age_bin >= 6 & age_bin < 13)
 }
 
@@ -306,13 +306,18 @@ calc_WPercentile <- function(
   filters = function(dset,...){return(dset)},
   wealthvar = "net_wealth",
   weightvar = "weight", 
-  cntryvar = "country"
+  cntryvar = "country",
+  negative_to_zero = F
 ) {
   # weighted cumulative wealth distribution quantiles
   dset <- omni_filt(dset, cntr, filters, 
                     descending, wealthvar, weightvar, cntryvar)
   
   wealth <- rep(dset[[wealthvar]], round(dset[[weightvar]])) # weighted
+  
+  if (negative_to_zero){
+    wealth[wealth < 0] = 0
+  }
   
   if (cumulative) {
     quantile(x = cumsum(wealth), probs = probs) / sum(wealth)
