@@ -99,7 +99,7 @@ Prop_netwealth <- allCountries %>%
         dset,
         cntr=cnt,
         wealthvar = "net_wealth",
-        filters = filter_both,  # age and non-negative
+        filters = filter_age,  # age and non-negative
         descending = T # richest to poorest
       )
     })
@@ -113,7 +113,7 @@ Prop_liquidassets <- allCountries %>%
         dset,
         cntr=cnt,
         wealthvar = "liquid_assets",
-        filters = filter_both, # age and non-negative
+        filters = filter_age, # age and non-negative
         descending = T #richest to poorest
       )
     })
@@ -128,7 +128,7 @@ Prop_offshoreweath <- allCountries %>%
         dset,
         cntr=cnt,
         wealthvar = "offshore_wealth",
-        filters = filter_both, # age and non-negative
+        filters = filter_age, # age and non-negative
         descending = T #richest to poorest
       )
     })
@@ -142,7 +142,7 @@ Prop_offshoreweath_liquid <- allCountries %>%
         dset,
         cntr=cnt,
         wealthvar = "liquid_offshore_wealth",
-        filters = filter_both, # age and non-negative
+        filters = filter_age, # age and non-negative
         descending = T #richest to poorest
       )
     })
@@ -157,7 +157,7 @@ Prop_netwealth_asc <- allCountries %>%
         cntr=cnt, 
         probs = seq(0,1,0.001),
         wealthvar = "net_wealth",
-        filters = filter_both, # age and non-negative
+        filters = filter_age, # age and non-negative
         descending = F # poorest to richerst
       )
     })
@@ -172,7 +172,7 @@ Prop_liquidassets_asc <- allCountries %>%
         cntr=cnt,
         probs = seq(0,1,0.001),
         wealthvar = "liquid_assets",
-        filters = filter_both, # age and non-negative
+        filters = filter_age, # age and non-negative
         descending = F #richest to poorest
       )
     })
@@ -188,7 +188,7 @@ Prop_offshorewealth_asc <- allCountries %>%
         cntr=cnt,
         probs = seq(0,1,0.001),
         wealthvar = "offshore_wealth",
-        filters = filter_both, # age and non-negative
+        filters = filter_age, # age and non-negative
         descending = F #richest to poorest
       )
     })
@@ -203,7 +203,7 @@ Prop_liquidoffshorewealth_asc <- allCountries %>%
         cntr=cnt,
         probs = seq(0,1,0.001),
         wealthvar = "liquid_offshore_wealth",
-        filters = filter_both, # age and non-negative
+        filters = filter_age, # age and non-negative
         descending = F #richest to poorest
       )
     })

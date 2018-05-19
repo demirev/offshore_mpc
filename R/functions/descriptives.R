@@ -108,6 +108,10 @@ bigImport <- function(targetdir = "data/HFCS_UDB_1_3_ASCII/") {
           weight = household_weight,
           permanent_income_flag = permanent_income_flag
         ) %>%
+        # mutate(
+        #   liquid_assets = liquid_assets * (liquid_assets > 0),
+        #   net_wealth = net_wealth * (net_wealth > 0)
+        # ) %>%
         group_by(country) %>%
         mutate(
           offshore_wealth = calc_offshore2(
@@ -193,8 +197,8 @@ calc_offshore2 <- function(
 # Filters -----------------------------------------------------------------
 filter_age <- function(dset, wealthvar) {
   dset %>%
-    filter((age > 25 & age <= 60) |
-             country == "MT" & age_bin >= 6 & age_bin < 13)
+    filter((age >= 25 & age <= 60) |
+             (country == "MT" & age_bin >= 6 & age_bin < 13))
 }
 
 filter_income <- function(dset, wealthvar) {
