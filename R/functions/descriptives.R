@@ -310,13 +310,18 @@ calc_WPercentile <- function(
   filters = function(dset,...){return(dset)},
   wealthvar = "net_wealth",
   weightvar = "weight", 
-  cntryvar = "country"
+  cntryvar = "country",
+  negative_to_zero = F
 ) {
   # weighted cumulative wealth distribution quantiles
   dset <- omni_filt(dset, cntr, filters, 
                     descending, wealthvar, weightvar, cntryvar)
   
   wealth <- rep(dset[[wealthvar]], round(dset[[weightvar]])) # weighted
+  
+  if (negative_to_zero){
+    wealth[wealth < 0] = 0
+  }
   
   if (cumulative) {
     quantile(x = cumsum(wealth), probs = probs) / sum(wealth)
