@@ -614,7 +614,7 @@ AgentType <- R6Class(
       # steady state capital
       #browser()
       if (!onlySS) {
-        k_seq <- c(0.2*ss_k, 0.6*ss_k, ss_k, 1.5*ss_k, 3*ss_k)
+        k_seq <- c(0.5*ss_k, 0.8*ss_k, ss_k, 1.4*ss_k)
       } else {
         k_seq <- ss_k
       }
