@@ -126,8 +126,7 @@ sink(str_glue("calibration_checkpoints/log_{country}_net_{date}.txt"),
 calibrated_net <- calibrate_genetic(
   FUN = function(betaPair) {
     run_calibration(
-      beta_mid = get(country, betas_cst)["beta_mid"], # guess CST values
-      beta_range = get(country, betas_cst)["beta_range"], 
+      beta_mid = betaPair[1], beta_range = betaPair[2], 
       sigma_xi = get(country, parameters)["sigma_xi"], 
       probs = seq(0, 1, 0.1) # deciles 
     )
