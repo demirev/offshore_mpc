@@ -117,7 +117,7 @@ run_calibration <- function(beta_mid, beta_range, beta_n = 7,
 
 # run ---------------------------------------------------------------------
 
-country <- "IT" # <------------------ change this to the desired country
+country <- "ES" # <------------------ change this to the desired country
 
 # Liquid assets, without offshore ----
 date = format(Sys.time(), "%y%m%d")
@@ -133,8 +133,8 @@ calibrated_liq <- calibrate_genetic(
   }, # wrapper around run_calibration that takes only 1 parameter
   lossF = lossKS(Targets$liq[country,]), # function that will be used to evaluate
   individual_generator = generateKSParams(
-    beta_mid_span = c(0.97, 0.99), 
-    beta_rng_span = c(0.0001, 0.003)
+    beta_mid_span = c(0.94, 0.98), 
+    beta_rng_span = c(0.0020, 0.025)
   ), # function that will generate candidate parameters
   npop = 10, # size of population
   nsurvive = 4, # number of survivors per generation
@@ -161,8 +161,8 @@ calibrated_liq_off <- calibrate_genetic(
   }, # wrapper around run_calibration that takes only 1 parameter
   lossF = lossKS(Targets$liq_offshore[country,]), # function that will be used to evaluate
   individual_generator = generateKSParams(
-    beta_mid_span = c(0.97, 0.99), 
-    beta_rng_span = c(0.0001, 0.003)
+    beta_mid_span = c(0.94, 0.98), 
+    beta_rng_span = c(0.0020, 0.025)
   ), # function that will generate candidate parameters
   npop = 10, # size of population
   nsurvive = 4, # number of survivors per generation
