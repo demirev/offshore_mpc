@@ -10,8 +10,13 @@ generateKSParams <- function(
 ) {
   # generates a single couple of beta_mid and beta_range (generator)
   param_drawer <- function() {
-    beta_mid = beta_mid_span[1] + runif(1)*(beta_mid_span[2] - beta_mid_span[1])
-    beta_rng = beta_rng_span[1] + runif(1)*(beta_rng_span[2] - beta_rng_span[1])
+    beta_mid = 2
+    beta_rng = 0
+    # generate beta_mid and beta_rng until all betas are between 0 and 1
+    while(beta_mid + beta_rng > 1 | beta_mid - beta_rng < 0) {
+      beta_mid = beta_mid_span[1] + runif(1)*(beta_mid_span[2] - beta_mid_span[1])
+      beta_rng = beta_rng_span[1] + runif(1)*(beta_rng_span[2] - beta_rng_span[1])
+    }
     return(
       c(beta_mid = beta_mid, beta_range = beta_rng)
     )
