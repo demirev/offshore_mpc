@@ -133,8 +133,8 @@ calibrated_liq <- calibrate_genetic(
   }, # wrapper around run_calibration that takes only 1 parameter
   lossF = lossKS(Targets$liq[country,]), # function that will be used to evaluate
   individual_generator = generateKSParams(
-    beta_mid_span = c(0.94, 0.98), 
-    beta_rng_span = c(0.0020, 0.025)
+    beta_mid_span = c(0.93, 0.97), 
+    beta_rng_span = c(0.01, 0.05)
   ), # function that will generate candidate parameters
   npop = 10, # size of population
   nsurvive = 4, # number of survivors per generation
@@ -161,8 +161,8 @@ calibrated_liq_off <- calibrate_genetic(
   }, # wrapper around run_calibration that takes only 1 parameter
   lossF = lossKS(Targets$liq_offshore[country,]), # function that will be used to evaluate
   individual_generator = generateKSParams(
-    beta_mid_span = c(0.94, 0.98), 
-    beta_rng_span = c(0.0020, 0.025)
+    beta_mid_span = c(0.93, 0.97), 
+    beta_rng_span = c(0.01, 0.05)
   ), # function that will generate candidate parameters
   npop = 10, # size of population
   nsurvive = 4, # number of survivors per generation
