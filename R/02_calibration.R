@@ -121,8 +121,6 @@ country <- "ES" # <------------------ change this to the desired country
 
 # Liquid assets, without offshore ----
 date = format(Sys.time(), "%y%m%d")
-sink(str_glue("calibration_checkpoints/log_{country}_liq_{date}.txt"), 
-     append = T, split = T)
 calibrated_liq <- calibrate_genetic(
   FUN = function(betaPair) {
     run_calibration(
@@ -143,14 +141,13 @@ calibrated_liq <- calibrate_genetic(
   nparents = 3, # number of parents per children
   nchild = 2,
   checkpoint = str_glue("calibration_checkpoints/{country}_liq.csv"), # file to write results to
-  recordOutput = T # add quantiles to file
+  recordOutput = T, # add quantiles to file
+  logMessages = T,
+  log_file = str_glue("calibration_checkpoints/log_{country}_liq_{date}.txt")
 )
-sink(NULL)
 
 # Liquid assets, with offshore ----
 date = format(Sys.time(), "%y%m%d")
-sink(str_glue("calibration_checkpoints/log_{country}_liq_off_{date}.txt"), 
-     append = T, split = T)
 calibrated_liq_off <- calibrate_genetic(
   FUN = function(betaPair) {
     run_calibration(
@@ -171,9 +168,10 @@ calibrated_liq_off <- calibrate_genetic(
   nparents = 3, # number of parents per children
   nchild = 2,
   checkpoint = str_glue("calibration_checkpoints/{country}_liq_off.csv"), # file to write results to
-  recordOutput = T # add quantiles to file
+  recordOutput = T, # add quantiles to file
+  logMessages = T,
+  log_file = str_glue("calibration_checkpoints/log_{country}_liq_off_{date}.txt")
 )
-sink(NULL)
 
 
 # solve on final parameters -----------------------------------------------
