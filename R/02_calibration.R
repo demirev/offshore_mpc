@@ -121,8 +121,6 @@ country <- "ES" # <------------------ change this to the desired country
 
 # Liquid assets, without offshore ----
 date = format(Sys.time(), "%y%m%d")
-sink(str_glue("calibration_checkpoints/log_{country}_liq_{date}.txt"), 
-     append = T, split = T)
 calibrated_liq <- calibrate_genetic(
   FUN = function(betaPair) {
     run_calibration(
@@ -133,8 +131,8 @@ calibrated_liq <- calibrate_genetic(
   }, # wrapper around run_calibration that takes only 1 parameter
   lossF = lossKS(Targets$liq[country,]), # function that will be used to evaluate
   individual_generator = generateKSParams(
-    beta_mid_span = c(0.94, 0.98), 
-    beta_rng_span = c(0.0020, 0.025)
+    beta_mid_span = c(0.93, 0.97), 
+    beta_rng_span = c(0.01, 0.05)
   ), # function that will generate candidate parameters
   npop = 10, # size of population
   nsurvive = 4, # number of survivors per generation
@@ -143,14 +141,13 @@ calibrated_liq <- calibrate_genetic(
   nparents = 3, # number of parents per children
   nchild = 2,
   checkpoint = str_glue("calibration_checkpoints/{country}_liq.csv"), # file to write results to
-  recordOutput = T # add quantiles to file
+  recordOutput = T, # add quantiles to file
+  logMessages = T,
+  log_file = str_glue("calibration_checkpoints/log_{country}_liq_{date}.txt")
 )
-sink(NULL)
 
 # Liquid assets, with offshore ----
 date = format(Sys.time(), "%y%m%d")
-sink(str_glue("calibration_checkpoints/log_{country}_liq_off_{date}.txt"), 
-     append = T, split = T)
 calibrated_liq_off <- calibrate_genetic(
   FUN = function(betaPair) {
     run_calibration(
@@ -161,8 +158,8 @@ calibrated_liq_off <- calibrate_genetic(
   }, # wrapper around run_calibration that takes only 1 parameter
   lossF = lossKS(Targets$liq_offshore[country,]), # function that will be used to evaluate
   individual_generator = generateKSParams(
-    beta_mid_span = c(0.94, 0.98), 
-    beta_rng_span = c(0.0020, 0.025)
+    beta_mid_span = c(0.93, 0.97), 
+    beta_rng_span = c(0.01, 0.05)
   ), # function that will generate candidate parameters
   npop = 10, # size of population
   nsurvive = 4, # number of survivors per generation
@@ -171,9 +168,10 @@ calibrated_liq_off <- calibrate_genetic(
   nparents = 3, # number of parents per children
   nchild = 2,
   checkpoint = str_glue("calibration_checkpoints/{country}_liq_off.csv"), # file to write results to
-  recordOutput = T # add quantiles to file
+  recordOutput = T, # add quantiles to file
+  logMessages = T,
+  log_file = str_glue("calibration_checkpoints/log_{country}_liq_off_{date}.txt")
 )
-sink(NULL)
 
 
 # solve on final parameters -----------------------------------------------

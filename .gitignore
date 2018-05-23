@@ -3,6 +3,7 @@
 .Rhistory
 .RData
 .Ruserdata
+*.Rproj
 /data/HFCS*
 /documentation/HFCSUserDataBase1_1Documentation
 /documentation/HFCSUserDataBase2_0Documentation

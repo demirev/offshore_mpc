@@ -4,14 +4,36 @@ lossKS <- function(target) {
   return(ff)
 }
 
+lossKSQuintiles <- function(target) {
+  # evaluates total distance between simulated and target quintiles (generator), 
+  # assuming targets come in quintiles and the data come in deciles
+  if (length(target) != 6){
+    stop("lossKSQunitiles can only be used with targets that have 6 columns")
+  }
+  ff <- function(quantiles) {
+    if (length(quantiles) != 11){
+      stop("lossKSQunitiles can only be used with quantile data that have 11 columns")
+    }
+    # Use columns 1, 3, 5, 7, 9, 11 (0%, 20%, 40%, 60%, 80%, 100%)
+    quintiles = quantiles[c(1, 3, 5, 7, 9, 11)]
+    return(sum(abs(quantiles - target)))
+  }
+  return(ff)
+}
+
 generateKSParams <- function(
   beta_mid_span = c(0.9, 0.99), 
   beta_rng_span = c(0.01, 0.1)
 ) {
   # generates a single couple of beta_mid and beta_range (generator)
   param_drawer <- function() {
-    beta_mid = beta_mid_span[1] + runif(1)*(beta_mid_span[2] - beta_mid_span[1])
-    beta_rng = beta_rng_span[1] + runif(1)*(beta_rng_span[2] - beta_rng_span[1])
+    beta_mid = 2
+    beta_rng = 0
+    # generate beta_mid and beta_rng until all betas are between 0 and 1
+    while(beta_mid + beta_rng > 1 | beta_mid - beta_rng < 0) {
+      beta_mid = beta_mid_span[1] + runif(1)*(beta_mid_span[2] - beta_mid_span[1])
+      beta_rng = beta_rng_span[1] + runif(1)*(beta_rng_span[2] - beta_rng_span[1])
+    }
     return(
       c(beta_mid = beta_mid, beta_range = beta_rng)
     )
@@ -31,10 +53,23 @@ calibrate_genetic <- function(
   nchild = 10, # number of children to spawn per generation
   initial_pop = NULL, # starting population can be supplied directly
   checkpoint = NULL, # file to write results to
-  recordOutput = F # if performance is saved to file should only fitness be
-  # recorded (F), or alsso the output of FUN (T)
+  recordOutput = F, # if performance is saved to file should only fitness be
+  logMessages = F, # if output should be recorded
+  log_file = NULL # file to write stdout to
 ) {
   # Performs a simple genetic optimization for hyper-parameter tuning
+  
+  # set up logging
+  if (logMessages) {
+    sink(log_file, append = T, split = T)
+    # a function that closes all open sinks
+    sink.reset <- function(){
+      for(i in seq_len(sink.number())){
+        sink(NULL)
+      }
+    }
+    on.exit(sink.reset()) # stop sinking once we're done
+  }
   
   if (nchild + nsurvive > npop - 1) stop("Reduce children or survivors")
   if (nchild > choose(nsurvive, nparents)) stop("Too many children requested")
