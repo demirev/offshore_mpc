@@ -4,6 +4,23 @@ lossKS <- function(target) {
   return(ff)
 }
 
+lossKSQuintiles <- function(target) {
+  # evaluates total distance between simulated and target quintiles (generator), 
+  # assuming targets come in quintiles and the data come in deciles
+  if (length(target) != 6){
+    stop("lossKSQunitiles can only be used with targets that have 6 columns")
+  }
+  ff <- function(quantiles) {
+    if (length(quantiles) != 11){
+      stop("lossKSQunitiles can only be used with quantile data that have 11 columns")
+    }
+    # Use columns 1, 3, 5, 7, 9, 11 (0%, 20%, 40%, 60%, 80%, 100%)
+    quintiles = quantiles[,c(1, 3, 5, 7, 9, 11)]
+    return(sum(abs(quantiles - target)))
+  }
+  return(ff)
+}
+
 generateKSParams <- function(
   beta_mid_span = c(0.9, 0.99), 
   beta_rng_span = c(0.01, 0.1)
