@@ -20,15 +20,16 @@ parameters <- list(
 # solve on final parameters -----------------------------------------------
 
 # contains one model for each country and model type, e.g. models$AT$betas_liq
-models = list() 
+models = list()
+mpcs = list() # contains list of every agent’s MPC, e.g. models$AT
 
-country = "AT"
-probs = seq(0,1,0.1)
+country = "AT" # TODO put this in a loop
 
 # everythin below this lines should go in a country loop 
 models[[country]] = list()
 
-for (specification in c("liq", "liq_off")) {
+for (specification in c("liq", "liq_off")) { 
+  estimated_betas = parameters[[country]][[specification]]
   beta_min = estimated_betas["beta_mid"] - estimated_betas["beta_range"]
   beta_max = estimated_betas["beta_mid"] + estimated_betas["beta_range"]
   beta_n = 7 # we only consider the model with seven agent types
@@ -90,8 +91,22 @@ for (specification in c("liq", "liq_off")) {
     num_out = 45, # discretization of m-space (number of grid points)
     fit_policy = fit_spline, # interpolation funciton
     verbose = 1, # print detailed messages or not
-    probs = probs # output percentiles - make sure they match Target
+    probs = seq(0,1,0.1) # output percentiles - make sure they match Target
   )
 }
 
-save(models, file = "models.RData")
+mpcs[[country]] = list()
+for (specification in c("liq", "liq_off")) {
+  all_mpcs = unlist(models[[country]][[specification]]$calcMPC()[["mpc_list"]])
+  mpcs[[country]][[specification]] = all_mpcs
+  
+  # histogram
+  hist(all_mpcs, main = paste("Histogram of", country, specification), freq = F)
+  
+  # histogram overlapping
+  
+  # summary stats: mean, median, standard deviation
+  
+  # box plots, stripplot (python in R), v plots
+}
+
