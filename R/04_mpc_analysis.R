@@ -8,21 +8,42 @@ source("R/classes/krussell_smith.R")
 
 # Parameter values for psi and xi
 # Obtained from (Carroll et al., 2014, Online Appendix, p. 6)
-default_sigma_psi = 0.01/4
-default_sigma_xi = 0.01*4
+default_sigma_psi <- 0.01/4
+default_sigma_xi <- 0.01*4
 parameters <- list(
   AT = list(sigma_psi = default_sigma_psi, sigma_xi = default_sigma_xi,
          liq = c(beta_mid=0.9671509686, beta_range=0.04406199825),
-         liq_off = c(beta_mid=0.953226385, beta_range=0.04243624967))
+         liq_off = c(beta_mid=0.953226385, beta_range=0.04243624967)),
+  # BE = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
+  # CY = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
+  # DE = list(sigma_psi=default_sigma_psi, sigma_xi=0.05*4),
+  # ES = list(sigma_psi=default_sigma_psi, sigma_xi=0.05*4),
+  FI = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
+         liq = c(beta_mid=0.953226385, beta_range=0.04243624967),
+         liq_off = c(beta_mid=0.9497632451, beta_range=0.04361658526)),
+  # FR = list(sigma_psi=default_sigma_psi, sigma_xi=0.031*4),
+  GR = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
+         liq = c(beta_mid=0.9445581602, beta_range=0.05528631474),
+         liq_off = c(beta_mid=0.9041646851, beta_range=0.04576946483)),
+  # IT = list(sigma_psi=default_sigma_psi, sigma_xi=0.075*4),
+  # LU = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
+  # MT = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
+  # NL = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
+  PT = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
+         liq = c(beta_mid=0.952499087, beta_range=0.04481387652),
+         liq_off = c(beta_mid=0.9445581602, beta_range=0.05528631474))
+  # SI = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
+  # SK = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi)
 )
-variables = c("liq", "liq_off") # wealth variables to look at
+variables <- c("liq", "liq_off") # wealth variables to look at
+models_file <- "data/generated/final_models.RData"
 
 
-# solve on final parameters -----------------------------------------------
+# functions -------------------------------------------------------------
 
 getFinalModels <- function(country_params) {
   models = list()
-  for (wealth_var in variables) { 
+  for (wealth_var in variables) { # variables should be an argument
     estimated_betas = country_params[[wealth_var]]
     beta_min = estimated_betas["beta_mid"] - estimated_betas["beta_range"]
     beta_max = estimated_betas["beta_mid"] + estimated_betas["beta_range"]
@@ -88,6 +109,7 @@ getFinalModels <- function(country_params) {
       probs = seq(0,1,0.1) # output percentiles - make sure they match Target
     )
   }
+  models
 }
 
 getMpcs <- function(models) {
@@ -98,28 +120,62 @@ getMpcs <- function(models) {
   mpcs <- as.data.frame(mpcs)
 }
 
-plotMpcHist <- function(mpcs_list, country_name="NA", alpha=0.25, binwidth=.1, 
-                        colors = palette(rainbow(2))) {
+widenMpcList <- function(mpcs) {
+  "Puts mpcs into a wide data frame"
+  mpcs <- melt(mpcs, variable.name="Estimate")
+  names(mpcs)[names(mpcs) == 'value'] <- 'MPC'
+  mpcs
+}
+
+plotMpcHist <- function(mpcs_list, country_name="NA", alpha=0.25, binwidth=.1) {
   "Plots a joint histogram of mpcs for multiple models"
   
-  if (length(mpcs_list) != 2) stop("can currently only plot two distributions")
+  mpcs_list <- widenMpcList(mpcs_list)
   
-  # put mpcs in one column and add a var column
-  mpcs_list <- melt(mpcs_list, variable.name="var")
-  
-  ggplot(mpcs_list, aes(x=value, fill = var)) + 
+  ggplot(mpcs_list, aes(x=MPC, fill = Estimate)) + 
     geom_histogram(alpha=alpha, binwidth=binwidth, position = "identity") # overlapping histogram
 }
 
-#if (!exists("models")) models <- sapply(parameters, getFinalModels)
-if (!exists("models")) load('models.RData') # for debugging
+plotMpcViolin <- function(mpcs_list, country_name="NA") {
+  "Plots a joint violin plot of mpcs for multiple models"
+  
+  mpcs_list <- widenMpcList(mpcs_list)
+  
+  ggplot(mpcs_list, aes(y=MPC, x = Estimate)) + 
+    geom_violin()
+}
+
+plotMpcBox <- function(mpcs_list, country_name="NA") {
+  "Plots a joint box plot of mpcs for multiple models"
+  
+  mpcs_list <- widenMpcList(mpcs_list)
+  
+  ggplot(mpcs_list, aes(y=MPC, x = Estimate)) + 
+    geom_boxplot()
+}
+
+
+# solve on final parameters -----------------------------------------------
+
+# only create models variable if it does not already exist and
+# load from file if possible
+if (!exists("models") & !file.exists(models_file)) {
+  models <- lapply(parameters, getFinalModels)
+  save(models, file = models_file)
+} else if (!exists("models")) {
+  load(models_file)
+}
+
+# caculate MPCs if they do not already exist
 if (!exists("mpcs")) mpcs <- lapply(models, getMpcs)
 
 # Histograms
-#lapply(mpcs, plotMpcHist)
-plotMpcHist(mpcs$AT)
+mpcs_hist <- lapply(mpcs, plotMpcHist)
 
-# TODO summary stats: mean, median, standard deviation
+# summary stats: mean, median, standard deviation
+mpcs_summary <- lapply(mpcs, summary)
 
-# TODO box plots, stripplot (python in R), v plots
+# box plots, v plots
+mpcs_boxplots <- lapply(mpcs, plotMpcBox)
+mpcs_vplot <- lapply(mpcs, plotMpcViolin)
 
