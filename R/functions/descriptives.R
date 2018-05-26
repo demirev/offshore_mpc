@@ -123,6 +123,16 @@ bigImport <- function(targetdir = "data/HFCS_UDB_1_3_ASCII/") {
             wealthvar = liquid_assets, 
             offshore = OffShoreWealth[country][[1]],
             weight = weight
+          ),
+          offshore_wealth_pareto = calc_offshore(
+            wealthvar = net_wealth,#liquid_assets, 
+            offshore = OffShoreWealth[country][[1]],
+            weight = weight
+          ),
+          liquid_offshore_wealth_pareto = calc_offshore(
+            wealthvar = liquid_assets, 
+            offshore = OffShoreWealth[country][[1]],
+            weight = weight
           )
         ) %>%
         ungroup
@@ -130,32 +140,48 @@ bigImport <- function(targetdir = "data/HFCS_UDB_1_3_ASCII/") {
 }
 
 
-
 # Off-shore Wealth Merge --------------------------------------------------
 calc_offshore <- function(wealthvar, offshore, 
                           probs = seq(0,1,length.out = length(wealthvar)), 
                           weight,
                           share_bottom_90 = 1.58226, coeff = 2.7672) {
-  browser()
-  qs <- quantile(wealthvar, probs)
   
-  original_order <- (1:length(wealthvar))[order(wealthvar)]
-  wealthvar <- wealthvar[order(wealthvar)]
+  wealthvar_weighted <- rep(wealthvar, round(weight))
+  original_id <- rep(1:length(wealthvar), round(weight))
+
+  qs <- quantile(wealthvar, seq(0,1, length.out = length(wealthvar_weighted)))
+  ps <- qs %>% names %>% str_replace("%","") %>% as.numeric
   
-  cumshares = vector("numeric",length(qs))
+  original_order <- original_id[order(wealthvar_weighted)]
+  wealthvar_ordered <- wealthvar_weighted[order(wealthvar_weighted)]
   
-  for (q in probs) {
-    if (q <= 0.9) {
-      cumshares[which(qs == q)] <- share_bottom_90/sum(qs <= 0.9)
-    } else {
-      cumshares[which(qs == q)] <- share_bottom_90/(1-q)^(1/coeff) - 
-        cumshares[which(qs == q)]
-    }
-    
-  }
+  cumshares = vector("numeric",length(wealthvar_ordered))
   
-  result <- wealthvar + cumshares*offshore*weight/sum(weight)
-  result <- result[original_order]
+  cumshares[wealthvar_ordered <= max(qs[ps <= 90])] <- cumsum(
+    rep(
+      share_bottom_90/sum(wealthvar_ordered <= max(qs[ps <= 90])), 
+      sum(wealthvar_ordered <= max(qs[ps <= 90]))
+    )
+  )
+  
+  cumshares[wealthvar_ordered > max(qs[ps <= 90])] <- share_bottom_90 /
+    (1 - ps[wealthvar_ordered > max(qs[ps <= 90])]/100)^(1/coeff) 
+  
+  cumshares[cumshares > 100] <- 100
+  cumshares <- cumshares/100
+  
+  shares <- cumshares - lag(cumshares)
+  shares[1] <- 0
+  shares[shares < 0] <- 0
+  shares[cumshares == 1] <- shares[shares != 0][length(shares[shares != 0])]/sum(cumshares == 1)
+  
+  offshore_wealth <- wealthvar_ordered + shares*offshore
+  
+  results <- tibble(offshore_wealth = offshore_wealth, original_order = original_order) %>%
+    group_by(original_order) %>%
+    summarise(offshore = mean(offshore_wealth))
+  
+  return(results$offshore)
 }
 
 calc_offshore2 <- function(
