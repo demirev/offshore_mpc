@@ -91,50 +91,35 @@ getFinalModels <- function(country_params) {
 }
 
 getMpcs <- function(models) {
-  "Returns a list of lists with the mpc of every individual in each calibrated model"
-  lapply(models, function(model){
+  "Returns a dataframe with the mpc of every individual in each calibrated model"
+  mpcs <- lapply(models, function(model){
     unlist(model$calcMPC()[["mpc_list"]])
   })
+  mpcs <- as.data.frame(mpcs)
 }
 
-plotMpcHist <- function(mpcs_list, country_name="NA", alpha=0.25) {
+plotMpcHist <- function(mpcs_list, country_name="NA", alpha=0.25, binwidth=.1, 
+                        colors = palette(rainbow(2))) {
   "Plots a joint histogram of mpcs for multiple models"
-  first <- T
-  n <- length(mpcs_list)
-  colors <- palette(rainbow(n, alpha=alpha)) 
-  figs = lapply(mpcs_list, hist)
-  for (i in seq(n)) {
-    var_name <- names(mpcs_list)[[i]]
-    plot(figs[[i]], col=colors[[i]], add=!first) 
-    first = F
-  }
+  
+  if (length(mpcs_list) != 2) stop("can currently only plot two distributions")
+  
+  # put mpcs in one column and add a var column
+  mpcs_list <- melt(mpcs_list, variable.name="var")
+  
+  ggplot(mpcs_list, aes(x=value, fill = var)) + 
+    geom_histogram(alpha=alpha, binwidth=binwidth, position = "identity") # overlapping histogram
 }
 
-models = sapply(parameters, getFinalModels)
-mpcs = lapply(models, getMpcs)
+#if (!exists("models")) models <- sapply(parameters, getFinalModels)
+if (!exists("models")) load('models.RData') # for debugging
+if (!exists("mpcs")) mpcs <- lapply(models, getMpcs)
 
-sapply(mpcs, plotMpcHist)
+# Histograms
+#lapply(mpcs, plotMpcHist)
+plotMpcHist(mpcs$AT)
 
+# TODO summary stats: mean, median, standard deviation
 
-# country = "AT" # TODO put this in sapply
-# # contains one model for each country and model type, e.g. models$AT$betas_liq
-# models = list()
-# mpcs = list() # contains list of every agent’s MPC, e.g. models$AT
-# 
-# models[[country]] = getFinalModels()
-# 
-# mpcs[[country]] = list()
-# for (wealth_var in c("liq", "liq_off")) {
-#   all_mpcs = unlist(models[[country]][[wealth_var]]$calcMPC()[["mpc_list"]])
-#   mpcs[[country]][[wealth_var]] = all_mpcs
-#   
-#   # histogram
-#   hist(all_mpcs, main = paste("Histogram of", country, wealth_var), freq = F)
-#   
-#   # histogram overlapping
-#   
-#   # summary stats: mean, median, standard deviation
-#   
-#   # box plots, stripplot (python in R), v plots
-# }
+# TODO box plots, stripplot (python in R), v plots
 
