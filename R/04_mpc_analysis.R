@@ -4,6 +4,8 @@ source("R/functions/calibration.R")
 source("R/classes/shocks_util_prod.R")
 source("R/classes/krussell_smith.R")
 
+library("reshape2")
+
 # input values -----------------------------------------------------------
 
 # Parameter values for psi and xi
@@ -12,31 +14,33 @@ default_sigma_psi <- 0.01/4
 default_sigma_xi <- 0.01*4
 parameters <- list(
   AT = list(sigma_psi = default_sigma_psi, sigma_xi = default_sigma_xi,
-         liq = c(beta_mid=0.9671509686, beta_range=0.04406199825),
-         liq_off = c(beta_mid=0.953226385, beta_range=0.04243624967)),
+            liq = c(beta_mid=0.9671509686, beta_range=0.04406199825),
+            liq_off = c(beta_mid=0.953226385, beta_range=0.04243624967)),
   # BE = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
   # CY = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
   # DE = list(sigma_psi=default_sigma_psi, sigma_xi=0.05*4),
   # ES = list(sigma_psi=default_sigma_psi, sigma_xi=0.05*4),
   FI = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
-         liq = c(beta_mid=0.953226385, beta_range=0.04243624967),
-         liq_off = c(beta_mid=0.9497632451, beta_range=0.04361658526)),
+            liq = c(beta_mid=0.953226385, beta_range=0.04243624967),
+            liq_off = c(beta_mid=0.9497632451, beta_range=0.04361658526)),
   # FR = list(sigma_psi=default_sigma_psi, sigma_xi=0.031*4),
   GR = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
-         liq = c(beta_mid=0.9445581602, beta_range=0.05528631474),
-         liq_off = c(beta_mid=0.9041646851, beta_range=0.04576946483)),
+            liq = c(beta_mid=0.9445581602, beta_range=0.05528631474),
+            liq_off = c(beta_mid=0.9041646851, beta_range=0.04576946483)),
   # IT = list(sigma_psi=default_sigma_psi, sigma_xi=0.075*4),
   # LU = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
   # MT = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
   # NL = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
   PT = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
-         liq = c(beta_mid=0.952499087, beta_range=0.04481387652),
-         liq_off = c(beta_mid=0.9445581602, beta_range=0.05528631474))
+            liq = c(beta_mid=0.952499087, beta_range=0.04481387652),
+            liq_off = c(beta_mid=0.9445581602, beta_range=0.05528631474))
   # SI = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
   # SK = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi)
 )
 variables <- c("liq", "liq_off") # wealth variables to look at
 models_file <- "data/generated/final_models.RData"
+# the program will skip seaborn graphs if this variable is set to empty string ""
+python_path <- "D:\\Run\\WinPython\\WinPython-64bit-3.6\\python-3.6.1.amd64\\python.exe"
 
 
 # functions -------------------------------------------------------------
@@ -169,13 +173,48 @@ if (!exists("models") & !file.exists(models_file)) {
 # caculate MPCs if they do not already exist
 if (!exists("mpcs")) mpcs <- lapply(models, getMpcs)
 
-# Histograms
-mpcs_hist <- lapply(mpcs, plotMpcHist)
+# create one dataframe with all the MPCs
+mpcs_wide <- melt(mpcs)
+names(mpcs_wide) <- c("Estimate", "MPC", "Country")
 
-# summary stats: mean, median, standard deviation
-mpcs_summary <- lapply(mpcs, summary)
+# this object contains all the plots and summary statistics
+mpc_analysis <- list()
+
+# histograms
+mpc_analysis$histograms <- lapply(mpcs, plotMpcHist)
+
+# summary stats: mean, median, 
+# TODO standard deviation
+mpc_analysis$summaries <- lapply(mpcs, summary)
 
 # box plots, v plots
-mpcs_boxplots <- lapply(mpcs, plotMpcBox)
-mpcs_vplot <- lapply(mpcs, plotMpcViolin)
+mpc_analysis$boxplots <- lapply(mpcs, plotMpcBox)
+mpc_analysis$vplots <- lapply(mpcs, plotMpcViolin)
 
+
+# graphs with seaborn -----------------------------------------------------
+if (python_path != "") {
+  library(reticulate)
+  use_python(python_path)
+  sns <- import('seaborn')
+  plt <- import('matplotlib.pyplot')
+  pd <- import('pandas')
+  
+  # Seaborn set-up
+  #sns$set(style="whitegrid")
+  
+  # strip plot
+  # works but not a good idea - there are too many agents
+  # stripplot <- sns$stripplot(x="MPC", y="Country", hue="Estimate", data=mpcs_wide, 
+  #                            jitter=2, split=T, alpha=.25, zorder=1)
+  # plt$show()
+  
+  # vplot
+  mpc_analysis$vplot_py <- sns$violinplot(x="Country", y="MPC", hue="Estimate", data=mpcs_wide,
+                                          split=TRUE)
+  
+  # plot the last graph
+  #plt$show()
+}
+
+save(mpcs, mpcs_wide, mpc_analysis, file="data/generated/mpc_analysis.RData")
