@@ -4,6 +4,13 @@ library(dplyr)
 library(readr)
 
 # IO ----------------------------------------------------------------------
+copy.table <- function(obj, size = 4096) {
+  clip <- paste('clipboard-', size, sep = '')
+  f <- file(description = clip, open = 'w')
+  write.table(obj, f, row.names = FALSE, sep = '\t')
+  close(f)  
+}
+
 listFilesType <- function(dir = "data/HFCS_UDB_1_2_ASCII/", type = "H") {
   
   # lists all files in `dir`` that match the pattertn type+number.csv
