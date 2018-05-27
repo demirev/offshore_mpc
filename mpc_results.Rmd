@@ -1,0 +1,39 @@
+---
+title: "Visualizations"
+output: html_document
+---
+<style type="text/css">
+.main-container {
+  max-width: 1800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+
+```{r setup, include=FALSE}
+library(reticulate)
+
+knitr::knit_engines$set(python = reticulate::eng_python)
+knitr::opts_chunk$set(cache=TRUE)
+```
+
+
+```{r source_analysis, message=FALSE, warning=FALSE, include=FALSE}
+load('data/generated/mpc_analysis.RData')  # faster loading for debugging
+#source("R/04_mpc_analysis.R")
+```
+
+### Distribution of MPCs
+```{python vplot}
+import seaborn as sns
+import matplotlib.pyplot as plt
+sns.violinplot(
+  data=r.mpcs_wide, x="Country", y="MPC", hue="Estimate",
+  inner="quartile",  # box (default) looks prettier but unclear interpertation
+  split=True,  # show offshore and non-offshore side-by-side
+  cut=0  # limit density to observed values, i.e. in [0, 1]
+)
+plt.show()
+```
+
