@@ -3,8 +3,11 @@ source("R/functions/dynprog.R")
 source("R/functions/calibration.R")
 source("R/classes/shocks_util_prod.R")
 source("R/classes/krussell_smith.R")
+source("R/functions/utils.R")
+source("R/functions/descriptives.R")
 
 library("reshape2")
+library("ggrepel")
 
 # input values -----------------------------------------------------------
 
@@ -38,9 +41,9 @@ parameters <- list(
   # SK = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi)
 )
 variables <- c("liq", "liq_off") # wealth variables to look at
+liq_label <- "Liquid Assets"
+liq_off_label <- "Liquid Assets + Offshore Wealth"
 models_file <- "data/generated/final_models.RData"
-# the program will skip seaborn graphs if this variable is set to empty string ""
-python_path <- "D:\\Run\\WinPython\\WinPython-64bit-3.6\\python-3.6.1.amd64\\python.exe"
 
 
 # functions -------------------------------------------------------------
@@ -53,7 +56,7 @@ getFinalModels <- function(country_params) {
     beta_max = estimated_betas["beta_mid"] + estimated_betas["beta_range"]
     beta_n = 7 # we only consider the model with seven agent types
     
-    # verify that estimated betas make sense
+    # TODO verify that estimated betas make sense
     #if (beta_min <= 0) stop("lowest beta cannot be smaller than 0")
     #if (beta_max >= 1) stop("highest beta cannot be greater than 1")
     
@@ -158,8 +161,37 @@ plotMpcBox <- function(mpcs_list, country_name="NA") {
     geom_boxplot()
 }
 
+plotMpcVsGini <- function(mpcs_wide, gini_liq, gini_liq_off, liq_label, liq_off_label) {
+  "Plots average MPCs against Ginis for all countries"
+  df <- aggregate(mpcs_wide[,2], mpcs_wide[,c(1,3)], FUN = mean)  # mean mpcs
+  names(df)[[3]] <- "AvgMPC"
+  
+  # combine two gini arrays & match format of mpc_wide
+  gini_df <- as.data.frame(cbind(gini_liq, gini_liq_off))
+  names(gini_df) <- c("liq", "liq_off")  # match Estimate values in mpcs
+  gini_df$Country <- rownames(gini_df)  # create country column
+  gini_df <- melt(gini_df, id.vars = "Country")  # match columns of mpcs
+  names(gini_df) <- c("Country", "Estimate", "GINI")  # match column names
+  gini_df$Estimate <- as.factor(gini_df$Estimate)  # match Estimate format
+  levels(gini_df$Estimate)[levels(gini_df$Estimate)=="liq"] <- liq_label
+  levels(gini_df$Estimate)[levels(gini_df$Estimate)=="liq_off"] <- liq_off_label
+  
+  # merge
+  df <- merge(df, gini_df, by=c("Country", "Estimate"), all = TRUE)
+  
+  # plot the whole thing
+  ggplot(df, aes(x=GINI, y=AvgMPC, color=Estimate)) + 
+    geom_point() + 
+    geom_label_repel(  # instead of geom_text(aes(label = Country))
+      aes(label = Country),
+      size = 3,
+      show.legend = FALSE,
+      label.size = 0  # supposedly deactivates the border of the labels
+    )
+}
 
-# solve on final parameters -----------------------------------------------
+
+# solve and analyse models ----------------------------------------------------
 
 # only create models variable if it does not already exist and
 # load from file if possible
@@ -176,6 +208,9 @@ if (!exists("mpcs")) mpcs <- lapply(models, getMpcs)
 # create one dataframe with all the MPCs
 mpcs_wide <- melt(mpcs)
 names(mpcs_wide) <- c("Estimate", "MPC", "Country")
+# give the Estimate factor readable values
+levels(mpcs_wide$Estimate)[levels(mpcs_wide$Estimate)=="liq"] <- liq_label
+levels(mpcs_wide$Estimate)[levels(mpcs_wide$Estimate)=="liq_off"] <- liq_off_label
 
 # this object contains all the plots and summary statistics
 mpc_analysis <- list()
@@ -184,37 +219,75 @@ mpc_analysis <- list()
 mpc_analysis$histograms <- lapply(mpcs, plotMpcHist)
 
 # summary stats: mean, median, 
-# TODO standard deviation
+# TODO standard deviation?
 mpc_analysis$summaries <- lapply(mpcs, summary)
 
 # box plots, v plots
 mpc_analysis$boxplots <- lapply(mpcs, plotMpcBox)
 mpc_analysis$vplots <- lapply(mpcs, plotMpcViolin)
 
+# MPCs versus GINI
+if (!exists("Wealthfiles")) Wealthfiles <- bigImport()
+allCountries <- unique(Wealthfiles[[1]]$country)
+if (!exists("gini_liq")) gini_liq <- allCountries %>%
+  sapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_Gini(
+        dset,
+        cntr=cnt,
+        wealthvar = "liquid_assets",
+        filters = filter_both # age and non-negative
+      )
+    })
+  })
+if (!exists("gini_liq_off")) gini_liq_off <- allCountries %>%
+  sapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_Gini(
+        dset,
+        cntr=cnt,
+        wealthvar = "liquid_offshore_wealth",
+        filters = filter_both # age and non-negative
+      )
+    })
+  })
+mpc_analysis$mpc_vs_gini <- plotMpcVsGini(mpcs_wide, gini_liq, gini_liq_off,
+                                          liq_label, liq_off_label)
 
-# graphs with seaborn -----------------------------------------------------
-if (python_path != "") {
-  library(reticulate)
-  use_python(python_path)
-  sns <- import('seaborn')
-  plt <- import('matplotlib.pyplot')
-  pd <- import('pandas')
-  
-  # Seaborn set-up
-  #sns$set(style="whitegrid")
-  
-  # strip plot
-  # works but not a good idea - there are too many agents
-  # stripplot <- sns$stripplot(x="MPC", y="Country", hue="Estimate", data=mpcs_wide, 
-  #                            jitter=2, split=T, alpha=.25, zorder=1)
-  # plt$show()
-  
-  # vplot
-  mpc_analysis$vplot_py <- sns$violinplot(x="Country", y="MPC", hue="Estimate", data=mpcs_wide,
-                                          split=TRUE)
-  
-  # plot the last graph
-  #plt$show()
+
+# wealth distributions by Joel ----------------------------------------------------
+
+load('data/generated/decile_targets.RData')
+#We want to loop only through the countries we have already calibrated
+countries <- as.list(names(models))
+names(countries) <- countries
+#Create list containing target and calibrated distributions and their difference
+distributions <- list()
+for (i in countries) {
+  #Non-offshore distributions
+  distributions[[i]]$liq$Target <- Targets$liq[i,]
+  distributions[[i]]$liq$Calibration <- models[[i]]$liq$quantileSummary()$quantiles
+  distributions[[i]]$liq$Difference <- distributions[[i]]$liq$Target -
+    distributions[[i]]$liq$Calibration
+  #Offshore distributions
+  distributions[[i]]$liq_offshore$Target <- Targets$liq_offshore[i,]
+  distributions[[i]]$liq_offshore$Calibration <- models[[i]]$liq_off$quantileSummary()$quantiles
+  distributions[[i]]$liq_offshore$Difference <- distributions[[i]]$liq_offshore$Target -
+    distributions[[i]]$liq_offshore$Calibration
 }
+names_distr <- rep('', length(countries)*6)
+seq <- seq_along(countries)*5-5
+for (i in 1:length(countries)) {
+  names_distr[i+seq[i]] <- countries[i]
+}
+Adjustment <- rep(c('Without Offshore', '','','With Offshore','',''),length(countries))
+distr_type <- rep(c('Target','Calibrated','Difference'), length(countries))
+df <- t(data.frame(distributions))
+df1 <- data.frame(Adjustment, distr_type, df)
+distributions_mat <- as.matrix(df1)
+rownames(distributions_mat) <- names_distr 
+colnames(distributions_mat) <- c('Adjusmtent', 'Distribution', colnames(df))
 
-save(mpcs, mpcs_wide, mpc_analysis, file="data/generated/mpc_analysis.RData")
+
+# save(mpcs, mpcs_wide, mpc_analysis, distributions, distributions_mat,
+#      file="data/generated/mpc_analysis.RData")
