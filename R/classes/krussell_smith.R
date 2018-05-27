@@ -376,6 +376,7 @@ KS_Economy <- R6Class(
       k = self$K / self$L,
       eps = 0.02 # epsilon increase in m leads to x% increase in spending
     ) {
+      
       mpc_list <- self$Agents %>%
         lapply(
           function(agent) {
@@ -391,6 +392,13 @@ KS_Economy <- R6Class(
               policy(m + eps, rep(k, nrow(agent$wallets))) - 
               policy(m, rep(k, nrow(agent$wallets)))
             )/eps
+            
+            mpc_vector[mpc_vector < 0] <- 0 # due to numerical instability of
+            # the sploine function, we might get some negative numbers.
+            # This only affects a handful of simulated agents (around 10 ou
+            # of 21000) but is a weakness of the implementation and can be
+            # improved later on. For now we coerce these agents to have non
+            # negative MPC
             
             mpc_vector <- 1 - (1 - mpc_vector)^4 # to annually
             
