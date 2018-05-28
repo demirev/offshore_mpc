@@ -127,12 +127,12 @@ bigImport <- function(targetdir = "data/HFCS_UDB_1_3_ASCII/") {
           offshore_wealth_pareto = calc_offshore(
             wealthvar = net_wealth,#liquid_assets, 
             offshore = OffShoreWealth[country][[1]],
-            weight = weight
+            weight = weight/10
           ),
           liquid_offshore_wealth_pareto = calc_offshore(
             wealthvar = liquid_assets, 
             offshore = OffShoreWealth[country][[1]],
-            weight = weight
+            weight = weight/10
           )
         ) %>%
         ungroup
@@ -146,17 +146,25 @@ calc_offshore <- function(wealthvar, offshore,
                           weight,
                           share_bottom_90 = 1.58226, coeff = 2.7672) {
   
+  weight[weight < 1] <- 1 # introduces a bug if weight = 0 after rounding
+  
+  # create weighted vector
   wealthvar_weighted <- rep(wealthvar, round(weight))
   original_id <- rep(1:length(wealthvar), round(weight))
-
+  print(pryr::object_size(wealthvar_weighted))
+  
+  # calculate quantiles of weighted vector
   qs <- quantile(wealthvar, seq(0,1, length.out = length(wealthvar_weighted)))
   ps <- qs %>% names %>% str_replace("%","") %>% as.numeric
   
+  # keep track of ordering so we can rearrange
   original_order <- original_id[order(wealthvar_weighted)]
   wealthvar_ordered <- wealthvar_weighted[order(wealthvar_weighted)]
   
+  
   cumshares = vector("numeric",length(wealthvar_ordered))
   
+  # split equally among first 90 percent
   cumshares[wealthvar_ordered <= max(qs[ps <= 90])] <- cumsum(
     rep(
       share_bottom_90/sum(wealthvar_ordered <= max(qs[ps <= 90])), 
@@ -164,12 +172,14 @@ calc_offshore <- function(wealthvar, offshore,
     )
   )
   
+  # top 10 percent as per coefficients of a pareto model
   cumshares[wealthvar_ordered > max(qs[ps <= 90])] <- share_bottom_90 /
     (1 - ps[wealthvar_ordered > max(qs[ps <= 90])]/100)^(1/coeff) 
   
   cumshares[cumshares > 100] <- 100
   cumshares <- cumshares/100
   
+  # handle issue with multiple individuals at 100%
   shares <- cumshares - lag(cumshares)
   shares[1] <- 0
   shares[shares < 0] <- 0
@@ -177,6 +187,7 @@ calc_offshore <- function(wealthvar, offshore,
   
   offshore_wealth <- wealthvar_ordered + shares*offshore
   
+  # reorganize in original state
   results <- tibble(offshore_wealth = offshore_wealth, original_order = original_order) %>%
     group_by(original_order) %>%
     summarise(offshore = mean(offshore_wealth))

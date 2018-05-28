@@ -74,6 +74,31 @@ Gini_offshore_liquid <- allCountries %>%
     })
   })
 
+Gini_offshore_pareto <- allCountries %>%
+  sapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_Gini(
+        dset,
+        cntr=cnt,
+        wealthvar = "offshore_wealth_pareto",
+        filters = filter_both # age and non-negative
+      )
+    })
+  })
+
+Gini_offshore_liquid_pareto <- allCountries %>%
+  sapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_Gini(
+        dset,
+        cntr=cnt,
+        wealthvar = "liquid_offshore_wealth_pareto",
+        filters = filter_both # age and non-negative
+      )
+    })
+  })
+
+
 Prop_netwealth <- allCountries %>%
   lapply(function(cnt) {
     mi_point(Wealthfiles, FUN = function(dset) {

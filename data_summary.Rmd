@@ -86,6 +86,30 @@ Gini_offshore_liquid <- allCountries %>%
     })
   })
 
+Gini_offshore_pareto <- allCountries %>%
+  sapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_Gini(
+        dset,
+        cntr=cnt,
+        wealthvar = "offshore_wealth_pareto",
+        filters = filter_both # age and non-negative
+      )
+    })
+  })
+
+Gini_offshore_liquid_pareto <- allCountries %>%
+  sapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_Gini(
+        dset,
+        cntr=cnt,
+        wealthvar = "liquid_offshore_wealth_pareto",
+        filters = filter_both # age and non-negative
+      )
+    })
+  })
+
 ```
 
 
@@ -261,7 +285,8 @@ tibble(
 ```{r echo=FALSE, fig.width=11}
 tibble(
   net_wealth = Gini_netwealth,
-  offshore_adjusted = Gini_offshore
+  offshore_adjusted = Gini_offshore,
+  offshore_adjusted_pareto = Gini_offshore_pareto
 ) %>%
   bar_plotter(allCountries)
 ```
@@ -270,7 +295,8 @@ tibble(
 ```{r echo=FALSE, fig.width=11}
 tibble(
   liquid_assets = Gini_liquidassets,
-  offshore_adjusted = Gini_offshore_liquid
+  offshore_adjusted = Gini_offshore_liquid,
+  offshore_adjusted_pareto = Gini_offshore_liquid_pareto
 ) %>%
   bar_plotter(allCountries)
 ```
