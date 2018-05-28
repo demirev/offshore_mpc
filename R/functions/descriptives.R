@@ -151,7 +151,7 @@ calc_offshore <- function(wealthvar, offshore,
   # create weighted vector
   wealthvar_weighted <- rep(wealthvar, round(weight))
   original_id <- rep(1:length(wealthvar), round(weight))
-  print(pryr::object_size(wealthvar_weighted))
+  #print(pryr::object_size(wealthvar_weighted))
   
   # calculate quantiles of weighted vector
   qs <- quantile(wealthvar, seq(0,1, length.out = length(wealthvar_weighted)))
