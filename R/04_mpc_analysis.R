@@ -44,6 +44,7 @@ variables <- c("liq", "liq_off") # wealth variables to look at
 liq_label <- "Liquid Assets"
 liq_off_label <- "Liquid Assets + Offshore Wealth"
 models_file <- "data/generated/final_models.RData"
+draw_gini_plot <- FALSE  # option to turn off gini plots because this takes for ever
 
 
 # functions -------------------------------------------------------------
@@ -227,32 +228,34 @@ mpc_analysis$boxplots <- lapply(mpcs, plotMpcBox)
 mpc_analysis$vplots <- lapply(mpcs, plotMpcViolin)
 
 # MPCs versus GINI
-if (!exists("Wealthfiles")) Wealthfiles <- bigImport()
-allCountries <- unique(Wealthfiles[[1]]$country)
-if (!exists("gini_liq")) gini_liq <- allCountries %>%
-  sapply(function(cnt) {
-    mi_point(Wealthfiles, FUN = function(dset) {
-      calc_Gini(
-        dset,
-        cntr=cnt,
-        wealthvar = "liquid_assets",
-        filters = filter_both # age and non-negative
-      )
+if (draw_gini_plot) {
+  if (!exists("Wealthfiles")) Wealthfiles <- bigImport()
+  allCountries <- unique(Wealthfiles[[1]]$country)
+  if (!exists("gini_liq")) gini_liq <- allCountries %>%
+    sapply(function(cnt) {
+      mi_point(Wealthfiles, FUN = function(dset) {
+        calc_Gini(
+          dset,
+          cntr=cnt,
+          wealthvar = "liquid_assets",
+          filters = filter_both # age and non-negative
+        )
+      })
     })
-  })
-if (!exists("gini_liq_off")) gini_liq_off <- allCountries %>%
-  sapply(function(cnt) {
-    mi_point(Wealthfiles, FUN = function(dset) {
-      calc_Gini(
-        dset,
-        cntr=cnt,
-        wealthvar = "liquid_offshore_wealth",
-        filters = filter_both # age and non-negative
-      )
+  if (!exists("gini_liq_off")) gini_liq_off <- allCountries %>%
+    sapply(function(cnt) {
+      mi_point(Wealthfiles, FUN = function(dset) {
+        calc_Gini(
+          dset,
+          cntr=cnt,
+          wealthvar = "liquid_offshore_wealth",
+          filters = filter_both # age and non-negative
+        )
+      })
     })
-  })
-mpc_analysis$mpc_vs_gini <- plotMpcVsGini(mpcs_wide, gini_liq, gini_liq_off,
-                                          liq_label, liq_off_label)
+  mpc_analysis$mpc_vs_gini <- plotMpcVsGini(mpcs_wide, gini_liq, gini_liq_off,
+                                            liq_label, liq_off_label)
+}
 
 
 # wealth distributions by Joel ----------------------------------------------------
@@ -284,10 +287,12 @@ Adjustment <- rep(c('Without Offshore', '','','With Offshore','',''),length(coun
 distr_type <- rep(c('Target','Calibrated','Difference'), length(countries))
 df <- t(data.frame(distributions))
 df1 <- data.frame(Adjustment, distr_type, df)
-distributions_mat <- as.matrix(df1)
-rownames(distributions_mat) <- names_distr 
-colnames(distributions_mat) <- c('Adjusmtent', 'Distribution', colnames(df))
+df2 <- as.matrix(df1)
+rownames(df2) <- names_distr 
+colnames(df2) <- c('Adjusmtent', 'Distribution', colnames(df))
+distributions_mat <-apply(df2, c(1,2), paste, collapse = "")
+rm(df, df1, df2)
 
 
-# save(mpcs, mpcs_wide, mpc_analysis, distributions, distributions_mat,
-#      file="data/generated/mpc_analysis.RData")
+save(mpcs, mpcs_wide, mpc_analysis, distributions, distributions_mat,
+     models, file="data/generated/mpc_analysis.RData")
