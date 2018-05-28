@@ -151,7 +151,7 @@ calc_offshore <- function(wealthvar, offshore,
   # create weighted vector
   wealthvar_weighted <- rep(wealthvar, round(weight))
   original_id <- rep(1:length(wealthvar), round(weight))
-  #print(pryr::object_size(wealthvar_weighted))
+  print(pryr::object_size(wealthvar_weighted))
   
   # calculate quantiles of weighted vector
   qs <- quantile(wealthvar, seq(0,1, length.out = length(wealthvar_weighted)))
@@ -176,14 +176,22 @@ calc_offshore <- function(wealthvar, offshore,
   cumshares[wealthvar_ordered > max(qs[ps <= 90])] <- share_bottom_90 /
     (1 - ps[wealthvar_ordered > max(qs[ps <= 90])]/100)^(1/coeff) 
   
-  cumshares[cumshares > 100] <- 100
-  cumshares <- cumshares/100
+  # handle issue with multiple individuals at 100% - approach 1
+  # cumshares[cumshares > 100] <- 100
+  # cumshares <- cumshares/100
+  # shares <- cumshares - lag(cumshares)
+  # shares[1] <- 0
+  # shares[shares < 0] <- 0
+  # shares[cumshares == 1] <- shares[shares != 0][length(shares[shares != 0])]/sum(cumshares == 1)
   
-  # handle issue with multiple individuals at 100%
+  # approach 2 - rescaling the tail
+  above_90 <- wealthvar_ordered > max(qs[ps <= 90])
+  cumshares[above_90] <- cumshares[above_90] - share_bottom_90
+  cumshare_adj <- (cumshares[length(cumshares)]-share_bottom_90)/(100-share_bottom_90)
+  cumshares[above_90] <- cumshares[above_90]/cumshare_adj
+  cumshares[above_90] <- cumshares[above_90] + share_bottom_90
+  cumshares <- cumshares/100
   shares <- cumshares - lag(cumshares)
-  shares[1] <- 0
-  shares[shares < 0] <- 0
-  shares[cumshares == 1] <- shares[shares != 0][length(shares[shares != 0])]/sum(cumshares == 1)
   
   offshore_wealth <- wealthvar_ordered + shares*offshore
   
