@@ -44,7 +44,7 @@ variables <- c("liq", "liq_off") # wealth variables to look at
 liq_label <- "Liquid Assets"
 liq_off_label <- "Liquid Assets + Offshore Wealth"
 models_file <- "data/generated/final_models.RData"
-draw_gini_plot <- FALSE  # option to turn off gini plots because this takes for ever
+draw_gini_plot <- TRUE  # option to turn off gini plots because this takes for ever
 
 
 # functions -------------------------------------------------------------
@@ -181,14 +181,15 @@ plotMpcVsGini <- function(mpcs_wide, gini_liq, gini_liq_off, liq_label, liq_off_
   df <- merge(df, gini_df, by=c("Country", "Estimate"), all = TRUE)
   
   # plot the whole thing
-  ggplot(df, aes(x=GINI, y=AvgMPC, color=Estimate)) + 
+  ggplot(df, aes(x=GINI, y=AvgMPC, color=Estimate, shape=Estimate)) + 
     geom_point() + 
     geom_label_repel(  # instead of geom_text(aes(label = Country))
       aes(label = Country),
       size = 3,
       show.legend = FALSE,
       label.size = 0  # supposedly deactivates the border of the labels
-    )
+    ) +
+    theme_bw()  # remove background
 }
 
 
@@ -229,6 +230,7 @@ mpc_analysis$vplots <- lapply(mpcs, plotMpcViolin)
 
 # MPCs versus GINI
 if (draw_gini_plot) {
+  load("data/generated/wealthfiles_pareto_Christoph.RData")
   if (!exists("Wealthfiles")) Wealthfiles <- bigImport()
   allCountries <- unique(Wealthfiles[[1]]$country)
   if (!exists("gini_liq")) gini_liq <- allCountries %>%
