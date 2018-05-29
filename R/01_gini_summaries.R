@@ -217,6 +217,21 @@ Prop_liquidoffshorewealth_asc <- allCountries %>%
   })
 names(Prop_liquidoffshorewealth_asc) <- allCountries
 
+Prop_liquidoffshorewealth_pareto_asc <- allCountries %>%
+  lapply(function(cnt) {
+    mi_point(Wealthfiles, FUN = function(dset) {
+      calc_WPercentile(
+        dset,
+        cntr=cnt,
+        probs = seq(0,1,0.001),
+        wealthvar = "liquid_offshore_wealth_pareto",
+        filters = filter_both, # age and non-negative
+        descending = F #richest to poorest
+      )
+    })
+  })
+names(Prop_liquidoffshorewealth_pareto_asc) <- allCountries
+
 # Wealth-to-income
 WtoI_netwealth <- allCountries %>%
   lapply(function(cnt) {
@@ -252,6 +267,9 @@ names(WtoI_liquidassets) <- allCountries
 
 
 # Visualizations ----------------------------------------------------------
+Prop_liquidoffshorewealth_asc %>% as_tibble %>% lorenz_plotter
+Prop_liquidoffshorewealth_pareto_asc %>% as_tibble %>% lorenz_plotter
+
 v1 <- Prop_netwealth %>% as_tibble %>% lorenz_plotter
 v2 <- tibble(
   net_wealth = Gini_netwealth,

@@ -127,12 +127,12 @@ bigImport <- function(targetdir = "data/HFCS_UDB_1_3_ASCII/") {
           offshore_wealth_pareto = calc_offshore(
             wealthvar = net_wealth,#liquid_assets, 
             offshore = OffShoreWealth[country][[1]],
-            weight = weight/10
+            weight = weight
           ),
           liquid_offshore_wealth_pareto = calc_offshore(
             wealthvar = liquid_assets, 
             offshore = OffShoreWealth[country][[1]],
-            weight = weight/10
+            weight = weight
           )
         ) %>%
         ungroup
@@ -145,47 +145,42 @@ calc_offshore <- function(wealthvar, offshore,
                           probs = seq(0,1,length.out = length(wealthvar)), 
                           weight,
                           share_bottom_90 = 1.58226, coeff = 2.7672) {
-  
-  weight[weight < 1] <- 1 # introduces a bug if weight = 0 after rounding
-  
-  # create weighted vector
-  wealthvar_weighted <- rep(wealthvar, round(weight))
-  original_id <- rep(1:length(wealthvar), round(weight))
-  #print(pryr::object_size(wealthvar_weighted))
-  
-  # calculate quantiles of weighted vector
-  qs <- quantile(wealthvar, seq(0,1, length.out = length(wealthvar_weighted)))
-  ps <- qs %>% names %>% str_replace("%","") %>% as.numeric
-  
+  #browser()
   # keep track of ordering so we can rearrange
-  original_order <- original_id[order(wealthvar_weighted)]
-  wealthvar_ordered <- wealthvar_weighted[order(wealthvar_weighted)]
+  original_order <- (1:length(wealthvar))[order(wealthvar)]
+  wealthvar_ordered <- wealthvar[order(wealthvar)]
+  weight_ordered <- weight[order(wealthvar)]
   
+  # calculate percentiles
+  ps <- cumsum(weight_ordered) / sum(weight_ordered)
   
-  cumshares = vector("numeric",length(wealthvar_ordered))
+  #shares = vector("numeric",length(wealthvar_ordered))
   
   # split equally among first 90 percent
-  cumshares[wealthvar_ordered <= max(qs[ps <= 90])] <- cumsum(
-    rep(
-      share_bottom_90/sum(wealthvar_ordered <= max(qs[ps <= 90])), 
-      sum(wealthvar_ordered <= max(qs[ps <= 90]))
-    )
-  )
+  shares <- rep(
+    share_bottom_90/sum(weight_ordered[wealthvar_ordered <= max(wealthvar_ordered[ps <= 0.9])]), 
+    sum(wealthvar_ordered <= max(wealthvar_ordered[ps <= 0.9]))
+  )/100 #*  weight_ordered[wealthvar_ordered <= max(wealthvar_ordered[ps <= 0.9])]
+  
   
   # top 10 percent as per coefficients of a pareto model
-  cumshares[wealthvar_ordered > max(qs[ps <= 90])] <- share_bottom_90 /
-    (1 - ps[wealthvar_ordered > max(qs[ps <= 90])]/100)^(1/coeff) 
+  cumshares <- share_bottom_90 /
+    (1 - ps[wealthvar_ordered > max(wealthvar_ordered[ps <= 0.9])])^(1/coeff) 
   
+  cumshares <- c(share_bottom_90, cumshares)
   cumshares[cumshares > 100] <- 100
   cumshares <- cumshares/100
   
   # handle issue with multiple individuals at 100%
-  shares <- cumshares - lag(cumshares)
-  shares[1] <- 0
-  shares[shares < 0] <- 0
-  shares[cumshares == 1] <- shares[shares != 0][length(shares[shares != 0])]/sum(cumshares == 1)
+  shares_top10 <- cumshares - lag(cumshares)
+  shares_top10[cumshares == 1] <- shares_top10[shares_top10 != 0][
+    length(shares_top10[shares_top10 != 0])]/sum(cumshares == 1)
+  shares_top10 <- shares_top10[-1]
+  shares_top10 <- shares_top10 / weight_ordered[wealthvar_ordered > max(wealthvar_ordered[ps <= 0.9])]
   
-  offshore_wealth <- wealthvar_ordered + shares*offshore
+  shares <- c(shares, shares_top10)
+  
+  offshore_wealth <- wealthvar_ordered + (shares*offshore)
   
   # reorganize in original state
   results <- tibble(offshore_wealth = offshore_wealth, original_order = original_order) %>%
