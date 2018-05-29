@@ -11,34 +11,57 @@ library("ggrepel")
 
 # input values -----------------------------------------------------------
 
-# Parameter values for psi and xi
-# Obtained from (Carroll et al., 2014, Online Appendix, p. 6)
+# Parameter values 
+# psi and xi are obtained from (Carroll et al., 2014, Online Appendix, p. 6)
 default_sigma_psi <- 0.01/4
 default_sigma_xi <- 0.01*4
+# exclude CY, MT and LU which do not have offshore wealth estimates
 parameters <- list(
   AT = list(sigma_psi = default_sigma_psi, sigma_xi = default_sigma_xi,
-            liq = c(beta_mid=0.9671509686, beta_range=0.04406199825),
+            liq = c(beta_mid=0.9615444847, beta_range=0.03845551433),
             liq_off = c(beta_mid=0.953226385, beta_range=0.04243624967)),
-  # BE = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
-  # CY = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
-  # DE = list(sigma_psi=default_sigma_psi, sigma_xi=0.05*4),
-  # ES = list(sigma_psi=default_sigma_psi, sigma_xi=0.05*4),
+  BE = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
+            liq = c(beta_mid=0.960384507, beta_range=0.03869966263),
+            liq_off = c(beta_mid=0.9481308482, beta_range=0.04404311409)),
+  # CY = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
+  #           liq = c(beta_mid=0.9563485375, beta_range=0.04365146148),
+  #           liq_off = c(beta_mid=0.9563485375, beta_range=0.04365146148)),
+  DE = list(sigma_psi=default_sigma_psi, sigma_xi=0.05*4,
+            liq = c(beta_mid=0.9692282535, beta_range=0.03077174549),
+            liq_off = c(beta_mid=0.964282787, beta_range=0.03571721204)),
+  ES = list(sigma_psi=default_sigma_psi, sigma_xi=0.05*4,
+            liq = c(beta_mid=0.9480827236, beta_range=0.05191727536),
+            liq_off = c(beta_mid=0.9378592744, beta_range=0.06214072462)),
   FI = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
             liq = c(beta_mid=0.953226385, beta_range=0.04243624967),
-            liq_off = c(beta_mid=0.9497632451, beta_range=0.04361658526)),
-  # FR = list(sigma_psi=default_sigma_psi, sigma_xi=0.031*4),
+            liq_off = c(beta_mid=0.9481308482, beta_range=0.04404311409)),
+  FR = list(sigma_psi=default_sigma_psi, sigma_xi=0.031*4,
+            liq = c(beta_mid=0.9493433716, beta_range=0.02605999641),
+            liq_off = c(beta_mid=0.9453141982, beta_range=0.04461877977)),
   GR = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
             liq = c(beta_mid=0.9445581602, beta_range=0.05528631474),
             liq_off = c(beta_mid=0.9041646851, beta_range=0.04576946483)),
-  # IT = list(sigma_psi=default_sigma_psi, sigma_xi=0.075*4),
-  # LU = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
-  # MT = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
-  # NL = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
+  IT = list(sigma_psi=default_sigma_psi, sigma_xi=0.075*4,
+            liq = c(beta_mid=0.9328957257, beta_range=0.06404633582),
+            liq_off = c(beta_mid=0.9322703618, beta_range=0.06687936708)),
+  # LU = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
+  #           liq = c(beta_mid=0.9607930198, beta_range=0.03147151368),
+  #           liq_off = c(beta_mid=0.9607930198, beta_range=0.03147151368)),
+  # MT = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
+  #           liq = c(beta_mid=0.9445581602, beta_range=0.05528631474),
+  #           liq_off = c(beta_mid=0.9445581602, beta_range=0.05528631474)),
+  NL = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
+            liq = c(beta_mid=0.9563485375, beta_range=0.04365146148),
+            liq_off = c(beta_mid=0.9530021276, beta_range=0.04480030176)),
   PT = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
             liq = c(beta_mid=0.952499087, beta_range=0.04481387652),
-            liq_off = c(beta_mid=0.9445581602, beta_range=0.05528631474))
-  # SI = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi),
-  # SK = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi)
+            liq_off = c(beta_mid=0.9445581602, beta_range=0.05528631474)),
+  SI = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
+            liq = c(beta_mid=0.9445581602, beta_range=0.05528631474),
+            liq_off = c(beta_mid=0.9445581602, beta_range=0.05528631474)),
+  SK = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
+            liq = c(beta_mid=0.952499087, beta_range=0.04481387652),
+            liq_off = c(beta_mid=0.952499087, beta_range=0.04481387652))
 )
 variables <- c("liq", "liq_off") # wealth variables to look at
 liq_label <- "Liquid Assets"
@@ -296,5 +319,5 @@ distributions_mat <-apply(df2, c(1,2), paste, collapse = "")
 rm(df, df1, df2)
 
 
-save(mpcs, mpcs_wide, mpc_analysis, distributions, distributions_mat,
-     models, file="data/generated/mpc_analysis.RData")
+# save(mpcs, mpcs_wide, mpc_analysis, distributions, distributions_mat,
+#      file="data/generated/mpc_analysis.RData")
