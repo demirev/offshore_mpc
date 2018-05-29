@@ -228,7 +228,7 @@ if (!exists("models") & !file.exists(models_file)) {
 }
 
 # caculate MPCs if they do not already exist
-if (!exists("mpcs")) mpcs <- lapply(models, getMpcs)
+mpcs <- lapply(models, getMpcs)
 
 # create one dataframe with all the MPCs
 mpcs_wide <- melt(mpcs)
@@ -253,7 +253,7 @@ mpc_analysis$vplots <- lapply(mpcs, plotMpcViolin)
 
 # MPCs versus GINI
 if (draw_gini_plot) {
-  load("data/generated/wealthfiles_pareto_Christoph.RData")
+  #load("data/generated/wealthfiles_pareto_Christoph.RData")
   if (!exists("Wealthfiles")) Wealthfiles <- bigImport()
   allCountries <- unique(Wealthfiles[[1]]$country)
   if (!exists("gini_liq")) gini_liq <- allCountries %>%
