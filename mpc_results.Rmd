@@ -19,7 +19,7 @@ knitr::opts_chunk$set(cache=TRUE)
 ```
 
 
-```{r source_analysis, message=FALSE, warning=FALSE, include=FALSE}
+```{r source_analysis, include=FALSE}
 load('data/generated/mpc_analysis.RData')  # faster loading for debugging
 #source("R/04_mpc_analysis.R")
 ```
@@ -28,12 +28,13 @@ load('data/generated/mpc_analysis.RData')  # faster loading for debugging
 ```{python vplot}
 import seaborn as sns
 import matplotlib.pyplot as plt
-sns.violinplot(
+mpc_vplot = sns.violinplot(
   data=r.mpcs_wide, x="Country", y="MPC", hue="Estimate",
   inner="quartile",  # box (default) looks prettier but unclear interpertation
   split=True,  # show offshore and non-offshore side-by-side
   cut=0  # limit density to observed values, i.e. in [0, 1]
 )
+mpc_vplot.set_ylim(bottom=0, top=1) # MPCs should be between 0 and 1
 plt.show()
 ```
 
