@@ -12,29 +12,44 @@ output: html_document
 
 
 ```{r setup, include=FALSE}
+# python set up
 library(reticulate)
-
 knitr::knit_engines$set(python = reticulate::eng_python)
-knitr::opts_chunk$set(cache=TRUE)
-```
 
-
-```{r source_analysis, include=FALSE}
+# import RData files
 load('data/generated/mpc_analysis.RData')  # faster loading for debugging
-#source("R/04_mpc_analysis.R")
+load('data/generated/final_models.RData')
 ```
+
 
 ### Distribution of MPCs
 ```{python vplot}
 import seaborn as sns
 import matplotlib.pyplot as plt
-mpc_vplot = sns.violinplot(
-  data=r.mpcs_wide, x="Country", y="MPC", hue="Estimate",
-  inner="quartile",  # box (default) looks prettier but unclear interpertation
-  split=True,  # show offshore and non-offshore side-by-side
-  cut=0  # limit density to observed values, i.e. in [0, 1]
-)
-mpc_vplot.set_ylim(bottom=0, top=1) # MPCs should be between 0 and 1
-plt.show()
+import numpy as np
+
+mpcs_wide = r.mpcs_wide
+# Save data frame
+#import pickle
+#with open("data/generated/mpcs.pkl", 'wb') as output:
+#    pickle.dump(r.mpcs_wide, output)
+
+# draw vplots
+sns.set_style("whitegrid")
+countries_per_plot = 2
+for countries in np.split(mpcs_wide.Country.unique(), countries_per_plot):
+    fig, ax = plt.subplots(figsize=(11, 5)) # use most of width of A4 (11.7)
+    mpc_vplot = sns.violinplot(
+        data=mpcs_wide[mpcs_wide["Country"].isin(countries)], 
+        x="Country", y="MPC", hue="Estimate",
+        inner="quartile",  # box (default) looks prettier but unclear interpertation
+        split=True,  # show offshore and non-offshore side-by-side
+        #cut=0,  # limit density to observed values, i.e. in [0, 1]
+        bw="scott", gridsize=100,  # standard kernel estimation parameters
+        ax = ax
+    )
+    mpc_vplot.set_ylim(bottom=0, top=1) # limit the MPC axis to [0, 1]
+    mpc_vplot.legend(title=None, frameon=True, loc=4) # nicer legend
+    plt.show()
 ```
 

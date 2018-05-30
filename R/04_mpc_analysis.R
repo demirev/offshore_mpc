@@ -30,13 +30,13 @@ parameters <- list(
             liq = c(beta_mid=0.9692282535, beta_range=0.03077174549),
             liq_off = c(beta_mid=0.964282787, beta_range=0.03571721204)),
   ES = list(sigma_psi=default_sigma_psi, sigma_xi=0.05*4,
-            liq = c(beta_mid=0.9480827236, beta_range=0.05191727536),
+            liq = c(beta_mid=0.9480827236, beta_range=0.05191727536),  # x
             liq_off = c(beta_mid=0.9378592744, beta_range=0.06214072462)),
   FI = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
             liq = c(beta_mid=0.953226385, beta_range=0.04243624967),
             liq_off = c(beta_mid=0.9481308482, beta_range=0.04404311409)),
   FR = list(sigma_psi=default_sigma_psi, sigma_xi=0.031*4,
-            liq = c(beta_mid=0.9493433716, beta_range=0.02605999641),
+            liq = c(beta_mid=0.9473855263, beta_range=0.03758246963),
             liq_off = c(beta_mid=0.9453141982, beta_range=0.04461877977)),
   GR = list(sigma_psi=default_sigma_psi, sigma_xi=default_sigma_xi,
             liq = c(beta_mid=0.9445581602, beta_range=0.05528631474),
@@ -241,19 +241,19 @@ levels(mpcs_wide$Estimate)[levels(mpcs_wide$Estimate)=="liq_off"] <- liq_off_lab
 mpc_analysis <- list()
 
 # histograms
-mpc_analysis$histograms <- lapply(mpcs, plotMpcHist)
+#mpc_analysis$histograms <- lapply(mpcs, plotMpcHist)
 
 # summary stats: mean, median, 
 # TODO standard deviation?
 mpc_analysis$summaries <- lapply(mpcs, summary)
 
 # box plots, v plots
-mpc_analysis$boxplots <- lapply(mpcs, plotMpcBox)
-mpc_analysis$vplots <- lapply(mpcs, plotMpcViolin)
+#mpc_analysis$boxplots <- lapply(mpcs, plotMpcBox)
+#mpc_analysis$vplots <- lapply(mpcs, plotMpcViolin)
 
 # MPCs versus GINI
 if (draw_gini_plot) {
-  #load("data/generated/wealthfiles_pareto_Christoph.RData")
+  load("data/generated/wealthfiles_pareto_Christoph.RData")
   if (!exists("Wealthfiles")) Wealthfiles <- bigImport()
   allCountries <- unique(Wealthfiles[[1]]$country)
   if (!exists("gini_liq")) gini_liq <- allCountries %>%
@@ -412,5 +412,5 @@ distributions_mat <- apply(df2, c(1,2), paste, collapse = "")
 rm(df, df1, df2)
 
 
-# save(mpcs, mpcs_wide, mpc_analysis, distributions, distributions_mat,
-#      file="data/generated/mpc_analysis.RData")
+save(mpcs, mpcs_wide, mpc_analysis, distributions, distributions_mat,
+     file="data/generated/mpc_analysis.RData")
