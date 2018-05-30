@@ -65,7 +65,7 @@ parameters <- list(
 )
 variables <- c("liq", "liq_off") # wealth variables to look at
 liq_label <- "Liquid Assets"
-liq_off_label <- "Liquid Assets + Offshore Wealth"
+liq_off_label <- "Liquid Assets + Offshore"
 models_file <- "data/generated/final_models.RData"
 draw_gini_plot <- TRUE  # option to turn off gini plots because this takes for ever
 
@@ -201,7 +201,7 @@ plotMpcVsGini <- function(mpcs_wide, gini_liq, gini_liq_off, liq_label, liq_off_
   levels(gini_df$Estimate)[levels(gini_df$Estimate)=="liq_off"] <- liq_off_label
   
   # merge
-  df <- merge(df, gini_df, by=c("Country", "Estimate"), all = TRUE)
+  df <- merge(df, gini_df, by=c("Country", "Estimate"), all = TRUE, colors=c("#4C72B0", "#55A868"))
   
   # plot the whole thing
   ggplot(df, aes(x=GINI, y=AvgMPC, color=Estimate, shape=Estimate)) + 
@@ -212,7 +212,116 @@ plotMpcVsGini <- function(mpcs_wide, gini_liq, gini_liq_off, liq_label, liq_off_
       show.legend = FALSE,
       label.size = 0  # supposedly deactivates the border of the labels
     ) +
-    theme_bw()  # remove background
+    theme_bw() +  # remove background
+    scale_color_manual(values=colors)  # seaborn colors
+}
+
+plotPolicies <- function(self) {
+  "Most recent plotDist implementation where self is a KS_Economy"
+  nbin = 300
+  padTo = 120
+  k = self$K / self$L
+  colr = c("#4C72B0", "#55A868")
+  colr2 = c("gray", "black")
+  type = "plotly"
+  ylimC = c(0,5)
+  ylimW = c(0,0.31)
+  xlim = c(0, 30)
+  
+  wealth <- self$Agents %>%
+    lapply(
+      function(agent) {
+        tibble(
+          m = agent$wallets$M / agent$wallets$pW,
+          beta = agent$beta
+        )
+      }
+    ) %>%
+    reduce(rbind)
+  
+  policies <- self$Agents %>%
+    lapply(
+      function(agent) {
+        
+        k_target <- unique(agent$QTable$k)
+        k_target <- k_target[which.min(abs(k_target - k))]
+        Q_target <- agent$QTable[agent$QTable$k == k_target, ]
+        
+        maxm <- max(Q_target$m)
+        mpad <- seq(maxm, padTo, 1)[-1]
+        kpad <- rep(k_target, length(mpad))
+        tibble(
+          m = c(Q_target$m, mpad),
+          k = c(Q_target$k, kpad),
+          c = c(Q_target$action, agent$policy(m = mpad, k = kpad)),
+          beta = agent$beta
+        )
+      }
+    ) %>%
+    reduce(rbind)
+  
+  if (type == "plotly") {
+    pallt <- colorRampPalette(col = colr)(length(unique(policies$beta)))
+    pallt2 <- colorRampPalette(col = colr2)(length(unique(policies$beta)))
+    p <- plot_ly() %>%
+      add_trace(
+        x = policies$m, y = policies$c, type = 'scatter', 
+        color = as.factor(policies$beta),
+        mode = 'lines', name = 'beta',  yaxis = 'y2', colors = pallt,
+        hoverinfo = "text",
+        text = policies$c
+      ) %>%
+      add_trace(
+        x = wealth$m, type = 'histogram', name = 'wealth', nbinsx = nbin,
+        colors = colr2,
+        histnorm = "probability"
+      ) %>%
+      layout(
+        title = 'Consumption and Wealth',
+        xaxis = list(
+          title = "m",
+          range = xlim
+        ),
+        yaxis2 = list(
+          side = 'right', 
+          title = '', 
+          overlaying = "y",
+          showgrid = FALSE, 
+          zeroline = FALSE,
+          range = ylimC
+        ),
+        yaxis = list(
+          side = 'left', 
+          title = '', 
+          showgrid = FALSE, 
+          zeroline = FALSE,
+          range = ylimW
+        )
+      )
+  } else if (type == "ggplot") {
+    policies$panel = "Policy"
+    wealth$panel = "Wealth"
+    
+    policies$ymax <- 6
+    wealth$ymax <- 16000
+    
+    p <- ggplot() + 
+      facet_grid(panel ~ ., scales = "free") + 
+      geom_line(
+        data = policies, 
+        aes(x = m, y = c, color = as.factor(beta))
+      ) +
+      geom_histogram(
+        data = wealth, 
+        aes(x = m, fill = as.factor(beta)), alpha = .5, bins = nbin
+      ) +
+      theme_bw() +
+      scale_color_grey() + 
+      scale_fill_grey() +
+      coord_cartesian(xlim = c(0, 30), ylim=c(0, 6)) +
+      geom_blank(data=wealth, aes(y=ymax)) +
+      geom_blank(data=policies, aes(y=ymax))
+  }
 }
 
 
@@ -281,6 +390,8 @@ if (draw_gini_plot) {
   mpc_analysis$mpc_vs_gini <- plotMpcVsGini(mpcs_wide, gini_liq, gini_liq_off,
                                             liq_label, liq_off_label)
 }
+
+mpc_analysis$policies_fi <- plotPolicies(models$FI$liq)
 
 
 # wealth distributions by Joel ----------------------------------------------------

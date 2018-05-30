@@ -415,7 +415,8 @@ KS_Economy <- R6Class(
     
     plotDist = function(nbin = 30, padTo = 120, k = self$K / self$L, 
                         colr = c("gray","black"), colr2 = c("gray", "black"),
-                        type = "ggplot", ylimC = c(0,8), ylimW = c(0,0.25)) {
+                        type = "ggplot", ylimC = c(0,8), ylimW = c(0,0.25),
+                        xlim = c(0, 30)) {
       
       wealth <- self$Agents %>%
         lapply(
@@ -456,25 +457,24 @@ KS_Economy <- R6Class(
           add_trace(
             x = policies$m, y = policies$c, type = 'scatter', 
             color = as.factor(policies$beta),
-            mode = 'lines', name = 'consumption',  yaxis = 'y2', colors = pallt,
-            #line = list(color = '#45171D'), 
+            mode = 'lines', name = 'beta',  yaxis = 'y2', colors = pallt,
             hoverinfo = "text",
             text = policies$c
           ) %>%
           add_trace(
             x = wealth$m, type = 'histogram', name = 'wealth', nbinsx = nbin,
-            color = as.factor(wealth$beta), colors = pallt2,
+            colors = colr2,
             histnorm = "probability"
           ) %>%
           layout(
             title = 'Consumption and Wealth',
             xaxis = list(
-              title = "m"#,
-              #range = c(0, 60)
+              title = "m",
+              range = xlim
             ),
             yaxis2 = list(
               side = 'right', 
-              title = 'c', 
+              title = '', 
               overlaying = "y",
               showgrid = FALSE, 
               zeroline = FALSE,
@@ -491,6 +491,10 @@ KS_Economy <- R6Class(
       } else if (type == "ggplot") {
         policies$panel = "Policy"
         wealth$panel = "Wealth"
+        
+        policies$ymax <- 6
+        wealth$ymax <- 16000
+        
         p <- ggplot() + 
           facet_grid(panel ~ ., scales = "free") + 
           geom_line(
@@ -503,7 +507,10 @@ KS_Economy <- R6Class(
           ) +
           theme_bw() +
           scale_color_grey() + 
-          scale_fill_grey()
+          scale_fill_grey() +
+          coord_cartesian(xlim = c(0, 30), ylim=c(0, 6)) +
+          geom_blank(data=wealth, aes(y=ymax)) +
+          geom_blank(data=policies, aes(y=ymax))
       }
       return(p)
     }
