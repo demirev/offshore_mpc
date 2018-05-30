@@ -283,6 +283,99 @@ if (draw_gini_plot) {
 }
 
 
+tableMPCWealth <- function(
+  models, 
+  probs = seq(0.1,1,0.1), 
+  wealthvar = "wealth" # "wealth" or "m"
+) {
+  MPCWealth <- lapply(
+    models, 
+    function(model){
+    # for each country
+      countryMPCWealth <- lapply(
+        # for offshore or not
+        variables,
+        function(variable) {
+          model  <- model[[variable]] # offshore or not
+          betas  <- sapply(model$Agents, function(Agent) Agent$beta)
+          mpcs   <- model$calcMPC()[["mpc_list"]]
+          wealth <- lapply(model$Agents, function(Agent) Agent$wallets$M) #not m!
+          permwealth <- lapply(
+            model$Agents, 
+            function(Agent) Agent$wallets$M / Agent$wallets$pW
+          )
+          
+          names(mpcs) <- betas
+          names(wealth) <- betas
+          names(permwealth) <- betas
+          
+          summary_table <- as_tibble(mpcs) %>% 
+            gather(key = "beta", value = "mpc") %>%
+            bind_cols(
+              wealth %>%
+                as_tibble %>%
+                gather(key = "beta", value = "wealth")
+            ) %>%
+            bind_cols(
+              permwealth %>%
+                as_tibble %>%
+                gather(key = "beta", value = "m")
+            ) %>%
+            select(-beta1) %>% select(-beta2)
+          
+          quantiles <- quantile(summary_table[[wealthvar]], probs)
+          
+          summary_table$q_wealth <- sapply(
+            summary_table[[wealthvar]], 
+            function(x) {
+              if (sum(quantiles < x) == 0) {
+                pr <- probs[1] # smallest percentile
+              } else {
+                pr <- probs[which.max(which(quantiles < x)) + 1]
+              }
+              return(pr)
+            }
+          )
+          
+          return(summary_table)
+        }
+      )
+      names(countryMPCWealth) <- variables
+      return(countryMPCWealth)
+    }
+  )
+  return(MPCWealth)
+}
+
+summaryMPCbyWealth <- function(summary_table) {
+  summary_table <- summary_table %>% 
+    group_by(q_wealth) %>% # group_by(q_wealth, beta) %>%
+    summarise(mean_mpc = mean(mpc))
+  return(summary_table)
+}
+
+summaryMPCbyBeta <- function(summary_table) {
+  summary_table <- summary_table %>% 
+    group_by(beta) %>% # group_by(q_wealth, beta) %>%
+    summarise(mean_mpc = mean(mpc))
+  return(summary_table)
+}
+
+summaryMPCbyBoth <- function(summary_table) {
+  summary_table <- summary_table %>% 
+    group_by(q_wealth, beta) %>%
+    summarise(mean_mpc = mean(mpc))
+  return(summary_table)
+}
+
+summaryMPCWealth_All <- function(Tables, FUN = summaryMPCbyWealth) {
+  # Tables = tableMPCWealth(Models)
+  Summaries <- lapply(Tables, function(Table) {
+    return(lapply(Table, match.fun(FUN)))
+  })
+  return(Summaries)
+}
+
 # wealth distributions by Joel ----------------------------------------------------
 
 load('data/generated/decile_targets.RData')
@@ -315,7 +408,7 @@ df1 <- data.frame(Adjustment, distr_type, df)
 df2 <- as.matrix(df1)
 rownames(df2) <- names_distr 
 colnames(df2) <- c('Adjusmtent', 'Distribution', colnames(df))
-distributions_mat <-apply(df2, c(1,2), paste, collapse = "")
+distributions_mat <- apply(df2, c(1,2), paste, collapse = "")
 rm(df, df1, df2)
 
 
