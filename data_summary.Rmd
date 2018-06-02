@@ -413,3 +413,58 @@ Prop_offshoreweath_liquid %>%
 #   add_header_above(c("Top % Wealth", "Country" = length(allCountries)))
 ```
 
+
+<!--
+Used for the final paper
+
+### Gini_liquidassets vs. Gini_offshore_liquid_pareto
+```{r, echo= FALSE, message = FALSE}
+ library(knitr)
+load('data/generated/gini_stuff.RData')
+
+gini_comp <- matrix(c(Gini_liquidassets, Gini_offshore_liquid_pareto),
+                    nrow = 2 ,ncol = length(Gini_liquidassets), byrow = TRUE)
+rownames(gini_comp) <- c('Gini Liquid Assets', 
+                         'Gini Liquid Assets with Offshore')
+colnames(gini_comp) <- names(Gini_liquidassets)
+ kable(gini_comp)
+
+```
+
+
+### Gini Net Wealth vs Liquid Assets
+```{r, echo= FALSE, message = FALSE}
+ library(knitr)
+load('data/generated/gini_stuff.RData')
+
+ ginis <- matrix(c(Gini_netwealth, Gini_liquidassets),
+                    nrow = 2 ,ncol = length(Gini_liquidassets), byrow = TRUE)
+rownames(ginis) <- c('Gini Net Wealth', 
+                         'Gini Liquid Assets')
+colnames(ginis) <- names(Gini_liquidassets)
+kable(ginis)
+```
+#--------------------------------------------------------------------------------
+
+FROM data_summary.Rmd
+
+### Lorenz curves 2 vs 2 Net_wealth
+```{r echo=FALSE}
+lorenz_plotter(as_tibble(Prop_netwealth_asc)[,c(2,8,12,15)])
+```
+
+### Lorenz curves 2 vs 2 Offshore Net_wealth
+```{r echo=FALSE}
+lorenz_plotter(as_tibble(Prop_offshorewealth_asc)[,c(2,8,12,15)])
+```
+
+### Lorenz curves 2 vs 2 Liquid assets
+```{r echo=FALSE}
+lorenz_plotter(as_tibble(Prop_liquidassets_asc)[,c(2,8,12,15)])
+```
+
+### Lorenz curves 2 vs 2 Offshore Liquid assets
+```{r echo=FALSE}
+lorenz_plotter(as_tibble(Prop_liquidoffshorewealth_pareto_asc)[,c(2,8,12,15)])
+```
+-->

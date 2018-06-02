@@ -6,10 +6,13 @@ source("R/classes/krussell_smith.R")
 source("R/functions/utils.R")
 source("R/functions/descriptives.R")
 
-library("reshape2")
-library("ggrepel")
-
 # input values -----------------------------------------------------------
+
+variables <- c("liq", "liq_off") # wealth variables to look at
+liq_label <- "Liquid Assets"
+liq_off_label <- "Liquid Assets + Offshore"
+models_file <- "data/generated/final_models.RData"
+gini_file <- "data/generated/ginis_liq.RData"  # leave empty for calculation of Ginis
 
 # Parameter values 
 # psi and xi are obtained from (Carroll et al., 2014, Online Appendix, p. 6)
@@ -63,11 +66,6 @@ parameters <- list(
             liq = c(beta_mid=0.952499087, beta_range=0.04481387652),
             liq_off = c(beta_mid=0.952499087, beta_range=0.04481387652))
 )
-variables <- c("liq", "liq_off") # wealth variables to look at
-liq_label <- "Liquid Assets"
-liq_off_label <- "Liquid Assets + Offshore"
-models_file <- "data/generated/final_models.RData"
-draw_gini_plot <- TRUE  # option to turn off gini plots because this takes for ever
 
 
 # functions -------------------------------------------------------------
@@ -185,7 +183,9 @@ plotMpcBox <- function(mpcs_list, country_name="NA") {
     geom_boxplot()
 }
 
-plotMpcVsGini <- function(mpcs_wide, gini_liq, gini_liq_off, liq_label, liq_off_label) {
+plotMpcVsGini <- function(mpcs_wide, gini_liq, gini_liq_off, 
+                          liq_label, liq_off_label, 
+                          colors=c("#4C72B0", "#55A868")) {
   "Plots average MPCs against Ginis for all countries"
   df <- aggregate(mpcs_wide[,2], mpcs_wide[,c(1,3)], FUN = mean)  # mean mpcs
   names(df)[[3]] <- "AvgMPC"
@@ -201,7 +201,7 @@ plotMpcVsGini <- function(mpcs_wide, gini_liq, gini_liq_off, liq_label, liq_off_
   levels(gini_df$Estimate)[levels(gini_df$Estimate)=="liq_off"] <- liq_off_label
   
   # merge
-  df <- merge(df, gini_df, by=c("Country", "Estimate"), all = TRUE, colors=c("#4C72B0", "#55A868"))
+  df <- merge(df, gini_df, by=c("Country", "Estimate"), all = TRUE)
   
   # plot the whole thing
   ggplot(df, aes(x=GINI, y=AvgMPC, color=Estimate, shape=Estimate)) + 
@@ -324,76 +324,6 @@ plotPolicies <- function(self) {
   }
 }
 
-
-# solve and analyse models ----------------------------------------------------
-
-# only create models variable if it does not already exist and
-# load from file if possible
-if (!exists("models") & !file.exists(models_file)) {
-  models <- lapply(parameters, getFinalModels)
-  save(models, file = models_file)
-} else if (!exists("models")) {
-  load(models_file)
-}
-
-# caculate MPCs if they do not already exist
-mpcs <- lapply(models, getMpcs)
-
-# create one dataframe with all the MPCs
-mpcs_wide <- melt(mpcs)
-names(mpcs_wide) <- c("Estimate", "MPC", "Country")
-# give the Estimate factor readable values
-levels(mpcs_wide$Estimate)[levels(mpcs_wide$Estimate)=="liq"] <- liq_label
-levels(mpcs_wide$Estimate)[levels(mpcs_wide$Estimate)=="liq_off"] <- liq_off_label
-
-# this object contains all the plots and summary statistics
-mpc_analysis <- list()
-
-# histograms
-#mpc_analysis$histograms <- lapply(mpcs, plotMpcHist)
-
-# summary stats: mean, median, 
-# TODO standard deviation?
-mpc_analysis$summaries <- lapply(mpcs, summary)
-
-# box plots, v plots
-#mpc_analysis$boxplots <- lapply(mpcs, plotMpcBox)
-#mpc_analysis$vplots <- lapply(mpcs, plotMpcViolin)
-
-# MPCs versus GINI
-if (draw_gini_plot) {
-  load("data/generated/wealthfiles_pareto_Christoph.RData")
-  if (!exists("Wealthfiles")) Wealthfiles <- bigImport()
-  allCountries <- unique(Wealthfiles[[1]]$country)
-  if (!exists("gini_liq")) gini_liq <- allCountries %>%
-    sapply(function(cnt) {
-      mi_point(Wealthfiles, FUN = function(dset) {
-        calc_Gini(
-          dset,
-          cntr=cnt,
-          wealthvar = "liquid_assets",
-          filters = filter_both # age and non-negative
-        )
-      })
-    })
-  if (!exists("gini_liq_off")) gini_liq_off <- allCountries %>%
-    sapply(function(cnt) {
-      mi_point(Wealthfiles, FUN = function(dset) {
-        calc_Gini(
-          dset,
-          cntr=cnt,
-          wealthvar = "liquid_offshore_wealth",
-          filters = filter_both # age and non-negative
-        )
-      })
-    })
-  mpc_analysis$mpc_vs_gini <- plotMpcVsGini(mpcs_wide, gini_liq, gini_liq_off,
-                                            liq_label, liq_off_label)
-}
-
-mpc_analysis$policies_fi <- plotPolicies(models$FI$liq)
-
-
 tableMPCWealth <- function(
   models, 
   probs = seq(0.1,1,0.1), 
@@ -402,7 +332,7 @@ tableMPCWealth <- function(
   MPCWealth <- lapply(
     models, 
     function(model){
-    # for each country
+      # for each country
       countryMPCWealth <- lapply(
         # for offshore or not
         variables,
@@ -487,6 +417,79 @@ summaryMPCWealth_All <- function(Tables, FUN = summaryMPCbyWealth) {
   return(Summaries)
 }
 
+
+# solve and analyse models ----------------------------------------------------
+
+# only create models variable if it does not already exist and
+# load from file if possible
+if (!exists("models") & !file.exists(models_file)) {
+  models <- lapply(parameters, getFinalModels)
+  save(models, file = models_file)
+} else if (!exists("models")) {
+  load(models_file)
+}
+
+# caculate MPCs if they do not already exist
+mpcs <- lapply(models, getMpcs)
+
+# create one dataframe with all the MPCs
+mpcs_wide <- melt(mpcs)
+names(mpcs_wide) <- c("Estimate", "MPC", "Country")
+# give the Estimate factor readable values
+levels(mpcs_wide$Estimate)[levels(mpcs_wide$Estimate)=="liq"] <- liq_label
+levels(mpcs_wide$Estimate)[levels(mpcs_wide$Estimate)=="liq_off"] <- liq_off_label
+
+# this object contains all the plots and summary statistics
+mpc_analysis <- list()
+
+# histograms
+#mpc_analysis$histograms <- lapply(mpcs, plotMpcHist)
+
+# summary stats
+mpc_analysis$summaries <- lapply(mpcs, summary)
+
+# box plots, v plots
+#mpc_analysis$boxplots <- lapply(mpcs, plotMpcBox)
+#mpc_analysis$vplots <- lapply(mpcs, plotMpcViolin)
+
+# MPCs versus GINI
+if (gini_file == "") {
+  if (!exists("Wealthfiles")) Wealthfiles <- bigImport()
+  allCountries <- unique(Wealthfiles[[1]]$country)
+  if (!exists("gini_liq")) gini_liq <- allCountries %>%
+    sapply(function(cnt) {
+      mi_point(Wealthfiles, FUN = function(dset) {
+        calc_Gini(
+          dset,
+          cntr=cnt,
+          wealthvar = "liquid_assets",
+          filters = filter_both # age and non-negative
+        )
+      })
+    })
+  if (!exists("gini_liq_off")) gini_liq_off <- allCountries %>%
+    sapply(function(cnt) {
+      mi_point(Wealthfiles, FUN = function(dset) {
+        calc_Gini(
+          dset,
+          cntr=cnt,
+          wealthvar = "liquid_offshore_wealth_pareto",
+          filters = filter_both # age and non-negative
+        )
+      })
+    })
+} else {
+  load(gini_file)
+}
+
+# plot mpc vs gini graph
+mpc_analysis$mpc_vs_gini <- plotMpcVsGini(mpcs_wide, gini_liq, gini_liq_off,
+                                          liq_label, liq_off_label)
+
+# plot policy function for Finland 
+mpc_analysis$policies_fi <- plotPolicies(models$FI$liq)
+
+
 # wealth distributions by Joel ----------------------------------------------------
 
 load('data/generated/decile_targets.RData')
@@ -497,15 +500,16 @@ names(countries) <- countries
 distributions <- list()
 for (i in countries) {
   #Non-offshore distributions
-  distributions[[i]]$liq$Target <- Targets$liq[i,]
-  distributions[[i]]$liq$Calibration <- models[[i]]$liq$quantileSummary()$quantiles
-  distributions[[i]]$liq$Difference <- distributions[[i]]$liq$Target -
-    distributions[[i]]$liq$Calibration
+  distributions[[i]]$liq$Target <- Targets$liq[i,]*100
+  distributions[[i]]$liq$Calibration <- models[[i]]$liq$quantileSummary()$quantiles*100
+  distributions[[i]]$liq$Difference <- (distributions[[i]]$liq$Target -
+                                          distributions[[i]]$liq$Calibration)
   #Offshore distributions
   distributions[[i]]$liq_offshore$Target <- Targets$liq_offshore[i,]
-  distributions[[i]]$liq_offshore$Calibration <- models[[i]]$liq_off$quantileSummary()$quantiles
-  distributions[[i]]$liq_offshore$Difference <- distributions[[i]]$liq_offshore$Target -
-    distributions[[i]]$liq_offshore$Calibration
+  distributions[[i]]$liq_offshore$Calibration <- 
+    models[[i]]$liq_off$quantileSummary()$quantiles
+  distributions[[i]]$liq_offshore$Difference <- (distributions[[i]]$liq_offshore$Target -
+                                                   distributions[[i]]$liq_offshore$Calibration)
 }
 names_distr <- rep('', length(countries)*6)
 seq <- seq_along(countries)*5-5
@@ -518,10 +522,63 @@ df <- t(data.frame(distributions))
 df1 <- data.frame(Adjustment, distr_type, df)
 df2 <- as.matrix(df1)
 rownames(df2) <- names_distr 
-colnames(df2) <- c('Adjusmtent', 'Distribution', colnames(df))
-distributions_mat <- apply(df2, c(1,2), paste, collapse = "")
-rm(df, df1, df2)
+colnames(df2) <- c('Adjustment', 'Distribution', colnames(df))
+#distributions_mat <-apply(df2, c(1,2), paste, collapse = "")
+Loss <- rep(NA,dim(df2)[1])
+df3 <- data.frame(df2, Loss)
+loss_liq <- list()
+loss_liq_offshore <- list()
+for (i in countries) {
+  loss_liq[[i]] <- (sum(abs(distributions[[i]]$liq$Target -
+                              distributions[[i]]$liq$Calibration)))
+  loss_liq_offshore[[i]] <- (sum(abs(distributions[[i]]$liq_offshore$Target -
+                                       distributions[[i]]$liq_offshore$Calibration)))
+}
+seq_liq <- seq(from = 3, to = dim(df3)[1]-3, by = 6)
+seq_liq_offshore <- seq(from = 6, to = dim(df3)[1], by = 6)
+
+for(i in 1:length(loss_liq)){
+  df3$Loss[[seq_liq[i]]] <- as.character(loss_liq[[i]])
+}
+for(i in 1:length(loss_liq)){
+  df3$Loss[[seq_liq_offshore[i]]] <- as.character(loss_liq_offshore[[i]])
+}
+df3 <- sapply(df3,as.character)
+df3[is.na(df3)] <- ''
+
+rownames(df3) <- names_distr
+colnames(df3) <- c('Adjusmtent', 'Distribution', colnames(df), 'Loss')
+distributions_mat <- as.matrix(df3)
+distributions_mat <- distributions_mat[,-c(3,13)]
+
+rm(df, df1, df2, df3)
+
+#MPCs distributions and betas, run parameters list in this file before running this
+tables <- tableMPCWealth(models) #load MPCs
+quant_names <- as.character(summaryMPCWealth_All(tables)[[1]][[1]][[1]])
+mpcs_b <- list()
+for (i in countries) {
+  #Non-offshore distributions
+  c<-c('a' = 0, 'b' = 0)
+  mpcs_b[[i]] <- c(summaryMPCWealth_All(tables)[[i]]$liq[[2]],     #Without
+                   'Avg MPC' = mean(summaryMPCWealth_All(tables)[[i]]$liq[[2]]),
+                   'beta_mid' = parameters[[i]]$liq[[1]],     
+                   'beta_range' = parameters[[i]]$liq[[2]], 
+                   summaryMPCWealth_All(tables)[[i]]$liq_off[[2]], #With
+                   'Avg MPC' = mean(summaryMPCWealth_All(tables)[[i]]$liq_off[[2]]),
+                   'beta_mid' = parameters[[i]]$liq_off[[1]],     
+                   'beta_range' = parameters[[i]]$liq_off[[2]])      
+}
+
+rownames_mpcs_b <- rep('', length(mpcs_b[[1]]))
+rownames_mpcs_b[[1]] <- 'Without Offshore'
+rownames_mpcs_b[[(length(mpcs_b[[1]])/2)+1]] <-  'With Offshore'
+
+table_names <- c(quant_names, 'Avg. MPC', 'beta_mid', 'beta_range',
+                 quant_names, 'Avg. MPC', 'beta_mid', 'beta_range')
+mpcs_beta_mat_ind <- as.matrix(data.frame('Distribution and parameters'=table_names, mpcs_b))
+rownames(mpcs_beta_mat_ind) <- rownames_mpcs_b
 
 
-save(mpcs, mpcs_wide, mpc_analysis, distributions, distributions_mat,
-     file="data/generated/mpc_analysis.RData")
+# save(mpcs, mpcs_wide, mpc_analysis, distributions, distributions_mat,
+#      file="data/generated/mpc_analysis.RData")

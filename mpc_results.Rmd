@@ -10,19 +10,51 @@ output: html_document
 }
 </style>
 
+# MPC summary based on calibrated models
+
 
 ```{r setup, include=FALSE}
 # python set up
 library(reticulate)
 knitr::knit_engines$set(python = reticulate::eng_python)
 
-# import RData files
-load('data/generated/mpc_analysis.RData')  # faster loading for debugging
-load('data/generated/final_models.RData')
+# import RData files (faster)
+#load('data/generated/mpc_analysis.RData')
+#load('data/generated/final_models.RData')
+
+library(knitr)
+```
+
+## Generate summary statistics & graphs
+```{r message=FALSE, warning=FALSE}
+source("R/04_mpc_analysis.R")
+
 ```
 
 
-### Distribution of MPCs
+## Wealth targeted vs. estimated distrubtions
+```{r, echo= FALSE, message = FALSE}
+kable(distributions_mat)
+```
+
+## Betas and MPCs
+```{r, echo= FALSE, message = FALSE}
+kable(mpcs_beta_mat_ind)
+```
+
+## Policy function
+```{r}
+mpc_analysis$policies_fi
+```
+
+
+## MPCs vs. Ginis
+```{r warning=FALSE}
+mpc_analysis$mpc_vs_gini
+```
+
+
+## Distribution of MPCs
 ```{python vplot}
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -38,7 +70,7 @@ mpcs_wide = r.mpcs_wide
 sns.set_style("whitegrid")
 countries_per_plot = 2
 for countries in np.split(mpcs_wide.Country.unique(), countries_per_plot):
-    fig, ax = plt.subplots(figsize=(11, 5)) # use most of width of A4 (11.7)
+    fig, ax = plt.subplots(figsize=(7, 2.5)) # size
     mpc_vplot = sns.violinplot(
         data=mpcs_wide[mpcs_wide["Country"].isin(countries)], 
         x="Country", y="MPC", hue="Estimate",
