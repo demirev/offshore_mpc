@@ -1,6 +1,6 @@
 # Swiss Bank Savings versus Piggy Bank Savings
 
-This repository contains source code for the paper “Swiss Bank Savings versus Piggy Bank Savings: The Effect of Offshore Wealth on Estimates of Inequality and the Marginal Propensity to Consume”. The paper was authored by (alphabetically): Nicolas Charlton, Georgi Demirev (maintains this repo), Daniel Ruiz Palomo, Christoph Semken (maintains this repo), Joël Terschuur.
+This repository contains source code for the paper [“Swiss Bank Savings versus Piggy Bank Savings: The Effect of Offshore Wealth on Estimates of Inequality and the Marginal Propensity to Consume”](https://raw.githubusercontent.com/demirev/offshore_mpc/master/deliverables/Swiss_Bank_Savings_vs_Piggy_Bank_Savings_June2018.pdf). The paper was authored by (alphabetically): Nicolas Charlton, Georgi Demirev (maintains this repo), Daniel Ruiz Palomo, Christoph Semken (maintains this repo), Joël Terschuur.
 
 The first part of the README gives an executive summary of the paper. The second part gives short instructions on reproducing the results.
 
